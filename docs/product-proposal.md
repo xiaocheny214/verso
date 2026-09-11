@@ -1,6 +1,6 @@
 ﻿# Verso / 背叶 Product Proposal
 
-对外名称：**Verso**（中文 **背叶**）。仓库与代码目录暂仍用 `wenju`。
+对外名称：**Verso**（中文 **背叶**）。GitHub 仓库、本地目录、Python 包一律用 `verso`（`verso_app` / `verso-common` / `verso-framework`）。
 License: proprietary commercial（见仓库 `LICENSE`）。
 
 # 项目 · 产品策划案：背叶（Verso）

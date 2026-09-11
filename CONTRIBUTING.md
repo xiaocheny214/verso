@@ -1,10 +1,10 @@
 # 参与贡献 / Contributing
 
-欢迎参与 [Verso（背叶）](https://github.com/xiaocheny214/wenju)（仓库名仍为 `wenju`）
+欢迎参与 [Verso（背叶）](https://github.com/xiaocheny214/verso)
 
 项目按 `Proposal → Issue → 分支 → PR → Review → 合并` 推进：所有改动从 Issue 出发，代码经 PR 合入 `main`。第一次参与，按本文档顺序读下来即可跑通全流程。
 
-产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/wenju/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
+产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/verso/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
 
 ## 许可
 
@@ -17,7 +17,7 @@
 
 ## 开始之前：克隆、Fork 与上游同步
 
-主仓库：`https://github.com/xiaocheny214/wenju`
+主仓库：`https://github.com/xiaocheny214/verso`
 
 - **已加入协作者、对主仓库有写权限**：直接从 `origin` 拉 `main`、开分支、向主仓库提 PR。
 - **没有写权限**：Fork 到个人账号，开发分支只放在自己的 fork 上，再向主仓库提 PR。
@@ -25,16 +25,16 @@
 Fork 协作时，先把仓库拉到本地并连上上游：
 
 ```bash
-git clone git@github.com:<你的账号>/wenju.git
-cd wenju
-git remote add upstream git@github.com:xiaocheny214/wenju.git
+git clone git@github.com:<你的账号>/verso.git
+cd verso
+git remote add upstream git@github.com:xiaocheny214/verso.git
 ```
 
 有写权限时：
 
 ```bash
-git clone git@github.com:xiaocheny214/wenju.git
-cd wenju
+git clone git@github.com:xiaocheny214/verso.git
+cd verso
 ```
 
 开新分支、提 PR 之前，先同步 `main` 再开分支：
@@ -88,9 +88,9 @@ ci: enforce commit and branch naming (#2)
 ## 提 Issue
 
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
-- 先确认 [#1](https://github.com/xiaocheny214/wenju/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
+- 先确认 [#1](https://github.com/xiaocheny214/verso/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
 - 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
-  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/wenju/issues/1)）
+  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/verso/issues/1)）
   - `feat`：产品功能
   - `bug`：缺陷
   - `ci`：门禁、工作流、提交 / 分支规范
