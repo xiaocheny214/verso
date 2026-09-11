@@ -1,6 +1,6 @@
 # 参与贡献 / Contributing
 
-欢迎参与 [Wenju（文局）](https://github.com/xiaocheny214/wenju)
+欢迎参与 [Verso（背叶）](https://github.com/xiaocheny214/wenju)（仓库名仍为 `wenju`）
 
 项目按 `Proposal → Issue → 分支 → PR → Review → 合并` 推进：所有改动从 Issue 出发，代码经 PR 合入 `main`。第一次参与，按本文档顺序读下来即可跑通全流程。
 
