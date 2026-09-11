@@ -12,4 +12,4 @@ Casual browsing invites from an article; a stated question matches other askers 
 
 This product borrows the *matchmaking ritual* from games, not intimacy meters, titles, avatar frames, or account leveling.
 
-Status: product spec is frozen; minimum MVP is next. Full proposal: `docs/product-proposal.md`.
+Status: product spec is frozen; minimum MVP is next. Full proposal: [`docs/product-proposal.md`](docs/product-proposal.md). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
