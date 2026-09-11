@@ -89,8 +89,14 @@ ci: enforce commit and branch naming (#2)
 
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
 - 先确认 [#1](https://github.com/xiaocheny214/wenju/issues/1) 的「做与不做」：战略上明确不做的能力，不要再开功能 Issue。
-- 请为每个 Issue 指定 owner（assignee）。没有 milestone 的 Issue 默认不在当前计划内。
-- 标签至少区分：`proposal`（提案 / 规格）、实现类 Issue 后续按工程补 `feat` / `bug` 等。
+- 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
+  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/wenju/issues/1)）
+  - `feat`：产品功能
+  - `bug`：缺陷
+  - `ci`：门禁、工作流、提交 / 分支规范
+  - `docs`：文档
+  - `chore`：仓库杂务、不改产品行为的配置
+- 每个 Issue 至少一枚类型标签，并指定 owner（assignee）。没有 milestone 的 Issue 默认不在当前计划内。
 - 关闭 Issue 时注明原因：已被 PR 解决（注明 PR 号）/ 被其他 Issue 取代（注明替代者）/ 组内确认不再需要。
 - 每个 Milestone 结束时归置遗留 Issue：已完成的关闭；划入下个 Milestone 的改挂并指定 owner；其余标明暂不计划。
 
