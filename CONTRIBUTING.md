@@ -4,7 +4,7 @@
 
 项目按 `Proposal → Issue → 分支 → PR → Review → 合并` 推进：所有改动从 Issue 出发，代码经 PR 合入 `main`。第一次参与，按本文档顺序读下来即可跑通全流程。
 
-产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/wenju/issues/1) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。亲密度、头衔、头像框、账号养成不在范围内，不要用 PR 夹带进来。
+产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/wenju/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
 
 ## 许可
 
@@ -88,7 +88,7 @@ ci: enforce commit and branch naming (#2)
 ## 提 Issue
 
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
-- 先确认 [#1](https://github.com/xiaocheny214/wenju/issues/1) 的「做与不做」：战略上明确不做的能力，不要再开功能 Issue。
+- 先确认 [#1](https://github.com/xiaocheny214/wenju/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
 - 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
   - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/wenju/issues/1)）
   - `feat`：产品功能

@@ -8,8 +8,6 @@ Light social matching on Zhihu-quality articles: start a short match on one piec
 - Chinese name: **文局**
 - License: proprietary commercial (see [LICENSE](LICENSE))
 
-Casual browsing invites from an article; a stated question matches other askers or answerers. Both sides must accept before a room is created. The article is the map. Rooms expire. Match history stays. A conversation summary is optional to keep.
+Casual browsing invites from an article. Both sides must accept before a room is created. The article is the map. Rooms expire. Match history stays. A conversation summary is optional to keep. Matching other askers, or routing a stated question to answerers, is incoming—not this MVP.
 
-This product borrows the *matchmaking ritual* from games, not intimacy meters, titles, avatar frames, or account leveling.
-
-Status: product spec is frozen; minimum MVP is next. Full proposal: [`docs/product-proposal.md`](docs/product-proposal.md). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Status: product spec is the living proposal in [`docs/product-proposal.md`](docs/product-proposal.md); minimum MVP is next. How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
