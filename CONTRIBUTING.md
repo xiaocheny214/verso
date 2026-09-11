@@ -47,7 +47,35 @@ git rebase origin/main
 git checkout -b <类型>/#<issue号>-<短英文名>
 ```
 
-分支名示例：`feat/#2-invite-handshake`、`fix/#3-room-timeout`、`docs/#1-contributing`。
+分支名示例：`feat/#2-invite-handshake`、`fix/#3-room-timeout`、`docs/#1-contributing`、`ci/#2-naming-conventions`。
+
+指向 `main` 的 PR 会检查分支名。`main` 本身不走这条规则。
+
+## 提交说明
+
+提交说明使用 Conventional Commits：
+
+```text
+type(scope): subject
+
+可选正文：说明为什么改，而不是改了哪些文件。
+```
+
+- `type` 常用：`feat`、`fix`、`docs`、`ci`、`chore`、`refactor`、`test`、`style`、`perf`、`revert`。
+- `scope` 可选，小写英文，如 `contributing`、`auth`、`room`。
+- `subject` 用现在时、不以句号结尾；中英文均可。
+- 解决某个 Issue 时，在 subject 末尾或正文写 `#12` / `Closes #12`。
+- 第一行建议不超过 120 个字符。
+
+示例：
+
+```text
+docs: bootstrap repository with license and product proposal
+docs(contributing): add Proposal-to-merge collaboration guide
+ci: enforce commit and branch naming (#2)
+```
+
+指向 `main` 的 PR 会用 commitlint 检查该分支上相对目标分支的全部提交。
 
 ## 本地开发与联调
 
@@ -61,15 +89,21 @@ git checkout -b <类型>/#<issue号>-<短英文名>
 
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
 - 先确认 [#1](https://github.com/xiaocheny214/wenju/issues/1) 的「做与不做」：战略上明确不做的能力，不要再开功能 Issue。
-- 请为每个 Issue 指定 owner（assignee）。没有 milestone 的 Issue 默认不在当前计划内。
-- 标签至少区分：`proposal`（提案 / 规格）、实现类 Issue 后续按工程补 `feat` / `bug` 等。
+- 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
+  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/wenju/issues/1)）
+  - `feat`：产品功能
+  - `bug`：缺陷
+  - `ci`：门禁、工作流、提交 / 分支规范
+  - `docs`：文档
+  - `chore`：仓库杂务、不改产品行为的配置
+- 每个 Issue 至少一枚类型标签，并指定 owner（assignee）。没有 milestone 的 Issue 默认不在当前计划内。
 - 关闭 Issue 时注明原因：已被 PR 解决（注明 PR 号）/ 被其他 Issue 取代（注明替代者）/ 组内确认不再需要。
 - 每个 Milestone 结束时归置遗留 Issue：已完成的关闭；划入下个 Milestone 的改挂并指定 owner；其余标明暂不计划。
 
 ## 提 PR
 
 - 每个 PR 关联对应 Issue（例如 `Closes #2`），改动范围与 Issue 一致，不夹带无关改动。
-- 合入 `main` 必须走 PR，必须获得至少一人 review 同意。分支保护与 CI 随工程落地后开启；在此之前仍禁止直推 `main`。
+- 合入 `main` 必须走 PR，必须获得至少一人 review 同意。指向 `main` 的 PR 会检查提交说明与分支名；在此之外禁止直推 `main`。
 - PR 合并由仓库维护者负责；提交后在 PR 里 @ 一位有写权限的队员即可。
 - **禁止把未经 review / 未合并的代码部署到演示或生产环境。**
 
