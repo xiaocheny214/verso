@@ -103,8 +103,9 @@ ci: enforce commit and branch naming (#2)
 ## 提 PR
 
 - 每个 PR 关联对应 Issue（例如 `Closes #2`），改动范围与 Issue 一致，不夹带无关改动。
-- 合入 `main` 必须走 PR，必须获得至少一人 review 同意。指向 `main` 的 PR 会检查提交说明与分支名；在此之外禁止直推 `main`。
-- PR 合并由仓库维护者负责；提交后在 PR 里 @ 一位有写权限的队员即可。
+- 合入 `main` 必须走 PR，且必须有至少一人 **Approve**。GitHub 已对 `main` 开保护：作者不能自己点同意，仓库创建者 / 管理员也不能绕过。没有他人 Approve，Merge 按钮不可用。
+- 指向 `main` 的 PR 会检查提交说明与分支名；禁止直推 `main`。
+- 提交后在 PR 里 @ 一位有写权限的队员来 Approve。合并仍由维护者点 Merge，但前提是已经有人同意。
 - **禁止把未经 review / 未合并的代码部署到演示或生产环境。**
 
 ## 接口契约
