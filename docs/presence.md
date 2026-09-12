@@ -4,18 +4,24 @@
 
 ## 1. Summary
 
-给 Verso 加上文下在场：已登录且 `active` 的用户，**打开文章详情并显式 join** 之后，才进入该 `article_id` 的在场集合。邀请候选人只来自这份集合。权威状态在 **Redis + 租约 TTL**，不建 Postgres 在场表。`GET /articles/{id}` 只读地图，**不得**因读详情而写入在场。
+给 Verso 加上文下在场：已登录且 `active` 的用户，**打开文章详情并显式 join** 之后，才进入该 `article_id` 的在场集合。权威状态是 Redis 上**成对的两份索引**，缺一不可：
 
-进场由前端在详情页就绪后发 `join`；离场由前端发 `leave`（路由离开、关页、进房）。后端感知不到浏览器关页是常态，因此 **心跳租约到期 = 离场**，不把「前端是否诚实」当成唯一依据。
+- `presence:article:{article_id}`：这篇上**现在还有谁**（邀请列表 / 同地图匹配的唯一候选人来源）
+- `presence:user:{user_id}`：这个人**现在在哪篇**（一人一篇、leave / 换文 / 心跳的倒排）
+
+两份必须用 Lua 一起改。邀请、accept、日后同地图匹配都读这份热状态，不另造在线表。`GET /articles/{id}` 只读地图，**不得**因读详情而写入在场。
+
+进场：详情就绪后 **WS `presence.join`**（写 Redis 并订频道），再 `GET` 快照做首屏。离场：换路由必须带旧 `article_id`；关页用空 body `sendBeacon`。WS 断线不等于离场。后端感知不到关页是常态，**心跳租约到期 = 离场**。
 
 ## 2. User Stories / Motivation
 
-- 两名已登录读者打开同一篇池内文章，文下看见对方，名单随进进出出更新；未打开该文的人不会出现。
+- 两名已登录读者打开同一篇池内文章，文下看见对方，名单随进进出出更新；未打开该文的人不会出现。这份名单就是可邀请对象，也是同地图匹配的候选池。
+- 同一人从文 X 转到文 Y：必须先从 X 的名单拿掉，再出现在 Y；系统靠 `presence:user` 找回旧文，禁止只往新 ZSET 里加。
 - 未登录可以读详情，但不上报在场、不进业务 WS、不能当邀请对象。
-- 关标签、回摸鱼流、崩溃、断网：对方应在租约内从名单消失，而不是永远占坑。
-- `invite` 创建与 accept 问「是否仍在这篇上」；本模块给布尔与名单，不写邀请行。
+- 关标签、回摸鱼流、崩溃：对方应在租约内从名单消失。网络闪断不立刻离场。
+- `invite` 创建与 accept 问「双方是否仍在这篇上」；本模块给名单、倒排和布尔，不写邀请行。
 
-共同需要：一份按文章分片、可过期、可推送的热集合；服务端能指认「谁在哪篇」。
+共同需要：按文章能列出在场者，按用户能指认在哪篇；两问都是主路径，不是附属缓存。
 
 ## 3. Current Workaround
 
@@ -24,9 +30,11 @@
 ## 4. Goals
 
 - 显式 `join` / `leave` / `heartbeat`；同一用户同一时刻最多一篇文章。
-- Redis 租约：心跳续期；到期从该文集合删除并推 `article:{id}`。
+- 文章正排：每篇一份 **ZSET**（谁在这篇上，score=到期时间）。
+- 用户倒排：每人一条 **STRING**（在哪一篇）；leave / 换文 / 心跳必须读它。
+- 写路径用 **Lua** 成对改两边；`is_present` 两边一致才为真。断线 ≠ 离场。
 - 详情页可拉快照；名单变更推频道，禁止全站广播。
-- 提供 `PresenceReader` 给 invite / feed：`is_present`、`list`、`count`。
+- 提供 `PresenceReader` 给 invite / feed：`list`、`is_present`、`current_article`、`count`。
 - 心跳路径禁止打知乎或 LLM。
 
 ## 5. Out of Scope
@@ -43,7 +51,7 @@
 
 ### 6.1 Design Rule
 
-**在场是会话上的租约，不是读地图的副作用。前端负责意图（打开 / 离开），后端负责真相（TTL）。**
+**在场是一对互为倒排的热索引：文章→人们，用户→文章。不是读地图的副作用。前端负责意图，后端负责租约与两边一致。**
 
 ```text
 GET /articles/{id}
@@ -52,20 +60,31 @@ GET /articles/{id}
 
 已登录用户停在详情页（前端编排，不是后端中间件）
   详情 2xx 且路由仍是该文
-  → join(article_id)
-  → 订 article:{id}
-  → 定时 heartbeat
+  → WS presence.join（写 Redis + 订 article:{id}）
+  → GET /articles/{id}/presence（首屏名单，不等推送）
+  → 定时 heartbeat（连着 WS 就走帧；否则 HTTP）
 
-离开该详情（路由变化 / 关页 / 进房）
-  → leave（WS 或 HTTP / sendBeacon）
-  → 退订 article:{id}
+离开该详情（路由变化 / 进房）
+  → WS presence.leave，body 必须带正在离开的 article_id
+  → 退订 article:{id}；连接保留（还要收 user:{id} 邀请）
+
+关页 / 杀标签
+  → sendBeacon POST /presence/leave（空 body，只带 Cookie）
+  → 失败则等租约，不重试 JSON CSRF
+
+两份索引（必须成对出现、成对删除）：
+  presence:article:{X}  这篇上还有谁     → 文下列表、发邀请、同地图候选
+  presence:user:{U}     这个人在哪一篇   → 一人一篇、找回旧文、关页空 body leave
 
 后端
-  join：校验 session active、文章存在、一人一篇
-  写入 Redis，刷新租约，推该文频道
-  heartbeat：只刷新租约；不打知乎
-  租约过期 ≡ leave
-  崩溃未 leave：等 TTL，不要等浏览器
+  join / 换文 / 裁过期：Lua（MULTI 不能 GET 完再分支；
+        ZREMRANGEBYSCORE 不返回 member，须先 ZRANGEBYSCORE -inf now）
+  heartbeat：GET 倒排得到当前篇；无人场 → 409
+             续 score + EXPIRE 倒排；裁该文过期成员（先取出 id 再删两边）
+  leave(article_id)：倒排已不是这篇 → 204 不改（换文迟到 leave / Strict Mode）
+  leave(空 body)：只用于 unload，按倒排清当前篇
+  WS 断线 ≠ leave；租约才是在场
+  崩溃未 leave：score 过期后从两边删掉
 ```
 
 不要做：在 `GET /articles/{id}` 后由服务端「监听成功就入库」。读接口会被预取、重试、多端刷新；离场也发不出来。前端可以在查询成功之后 **调用** join，这是客户端时序，不是把 presence 耦合进 article 用例。
@@ -74,16 +93,17 @@ GET /articles/{id}
 
 | 方法 | 路径 | 谁可调 | 行为 |
 |---|---|---|---|
-| `GET` | `/articles/{id}/presence` | 已登录 | 该文快照（含自己则标 `self`）；外人要邀请看这份，不是 `GET /invites` |
-| `POST` | `/presence/join` | 已登录 active | body `{ "article_id" }`；换文则先离旧文 |
-| `POST` | `/presence/leave` | 已登录 | body 可带 `article_id`；省略则离开当前篇；供 sendBeacon |
-| `POST` | `/presence/heartbeat` | 已登录 | 续当前租约；无人场则 409 |
+| `GET` | `/articles/{id}/presence` | 已登录 | 该文快照；`list` 与 `is_present` 同一判定（倒排须指向这篇） |
+| `POST` | `/presence/leave` | 已登录 | 关页用：空 body + Cookie，**不要求 CSRF 头**；按倒排离开当前篇 |
+| `POST` | `/presence/heartbeat` | 已登录 | WS 不可用时的续租；无人场 409。主路径用 WS `heartbeat` |
 
-WS（同一 Cookie 或短活 ticket；每用户 1 条业务连接）只收：
+在场主路径不走 `POST /presence/join`。HTTP join 若实现，只作运维/测试等价物，**不订频道**；产品客户端禁止 HTTP join 后再 WS join。
+
+WS（同一 Cookie 或 identity 短活 ticket；每用户 1 条业务连接）只收：
 
 ```text
 { "type": "presence.join", "article_id": "<uuid>" }
-{ "type": "presence.leave", "article_id": "<uuid>" }   # article_id 可省略
+{ "type": "presence.leave", "article_id": "<uuid>" }   # 路由离开：必带旧文 id
 { "type": "heartbeat" }
 ```
 
@@ -93,7 +113,27 @@ WS（同一 Cookie 或短活 ticket；每用户 1 条业务连接）只收：
 { "type": "presence.snapshot", "article_id": "<uuid>", "count": 2, "members": [ ... ] }
 ```
 
-`join` / `leave` 成功后推快照。`heartbeat` 不推。HTTP 与 WS 对 Redis 的效果相同；WS 额外完成订阅。未登录禁止连业务 WS。
+`presence.join`：写 Redis + 订 `article:{id}`（登录后那条连接应已订 `user:{id}`，本模块不改）。  
+`presence.leave`：退订该文频道，**不断连接**。  
+TCP / WS 断开：不 `leave`，不退在场；重连后若仍在该路由则再 `presence.join`（幂等续租+订阅）。  
+`heartbeat` 仅在裁掉过期成员时推快照。未登录禁止连业务 WS。
+
+推快照时短查 `users` 名片，立刻释放 ORM，禁止把数据库连接绑在 WS 生命周期上。
+
+**前端契约（规范，不是建议）：**
+
+```text
+登录成功 → 一条 WS（Cookie；跨端口拿 ticket，路径由 identity / realtime 冻结）
+打开文章 → GET 详情 2xx 且仍在该路由
+         → WS presence.join
+         → GET /articles/{id}/presence     # 首屏
+         → 心跳；visibility 回到 visible 立刻心跳或再 join
+离开路由 → WS presence.leave { article_id: 旧文 }
+         → 仍是当前路由则 effect cleanup 不得 leave（防 Strict Mode）
+关页     → sendBeacon POST /presence/leave  空 body
+heartbeat 409 → 仅当仍在该文章路由才再 join，否则停心跳
+后台标签 → 不保证租约；回到前台再续。Demo 用两台前台窗口
+```
 
 包边界：`web.api.presence` 与 WS 适配器只做协议；用例在 `server.presence`。`web` 不直连 Redis key。本模块 **读** identity（当前用户）、article（`articles.id` 存在）；**写** Redis；**调** `framework.realtime`。不写 `invites` / `rooms`。不发知乎请求。
 
@@ -106,14 +146,15 @@ VERSO_PRESENCE_LIST_MAX          # 快照人数上限，建议 50；超出仍准
 端口（对方未实现时用假实现）：
 
 ```text
-PresenceReader.is_present(user_id, article_id) -> bool
-PresenceReader.list(article_id) -> [PresenceMember]   # 不超过 LIST_MAX
-PresenceReader.count(article_id) -> int               # 真实人数，供 feed
+PresenceReader.list(article_id) -> [PresenceMember]     # 文下还有谁；邀请 UI 只读这个
+PresenceReader.is_present(user_id, article_id) -> bool  # 两边索引一致且未过期
+PresenceReader.current_article(user_id) -> article_id|None
+PresenceReader.count(article_id) -> int                 # 真实人数，供 feed
 
-PresenceWriter.leave(user_id) -> None                 # 进房 / 登出 / 封禁调用
+PresenceWriter.leave(user_id) -> None                   # 进房 / 登出 / 封禁：先读倒排再删两边
 ```
 
-`invite` 只依赖 `is_present`。`count` 不反写 `articles`。
+`GET /invites` 不是候选人列表。发邀请的人从 `list(article_id)` 里点；`invite` 创建与 accept 再问 `is_present`。日后同地图匹配仍读 `list`，不另建候选表。`count` 不反写 `articles`。
 
 ### 6.3 Examples as Specification
 
@@ -125,30 +166,38 @@ PresenceWriter.leave(user_id) -> None                 # 进房 / 登出 / 封禁
 A、B 已登录 active。A 打开 article X：
 
 GET /articles/X          → 200 地图；Redis 仍无 A
-POST /presence/join { "article_id": X }
-  session → users.id = A
-  articles.id = X 存在
-  若 A 已在 Y：先按 leave(Y) 再 join(X)
-  Redis：
-    presence:user:{A} = X
-    presence:lease:{A} TTL = LEASE_SEC
-    presence:article:{X} 加入 A
-  realtime 订 article:{X}
-  推 presence.snapshot 给该频道
+WS { type: presence.join, article_id: X }
+  session → users.id = A；articles.id = X 存在
+  Lua：若倒排为 Y 且 Y≠X → ZREM Y，并向 article:{Y} 推快照
+       ZADD presence:article:{X} score=now+LEASE member=A
+       SET presence:user:{A} X EX LEASE_SEC
+  订 article:{X}
+  推 presence.snapshot 给 article:{X}
+GET /articles/X/presence → 首屏 list(X)（含自己）
+此后 list(X) 含 A；current_article(A) = X
 
 B 同样 join(X)
-  GET /articles/X/presence
-    members 含 A、B（可含 self）
-    不含未 join 的用户
+  GET /articles/X/presence → list(X)
+    裁过期：ZRANGEBYSCORE -inf now → 对每个 id 若倒排仍是 X 则 DEL 倒排
+            再 ZREMRANGEBYSCORE -inf now
+    活着：ZRANGEBYSCORE now +inf，且 GET 倒排 == X（否则丢掉并 ZREM）
+    members 含 A、B；这就是可邀请 / 同地图候选
 
-A 发心跳
-  仅续 presence:lease:{A}
-  不碰知乎、不重推快照
+A 发心跳（WS heartbeat）
+  GET presence:user:{A} → 必须为 X，否则 409
+  ZADD 续 score；EXPIRE 倒排
+  同上裁过期；裁掉了人才推 snapshot
+  不碰知乎
 
 A 回列表
-  POST /presence/leave { "article_id": X } 或 WS presence.leave
-  删 lease / user 映射 / article 集合中的 A
-  推新快照（仅剩 B）
+  WS { type: presence.leave, article_id: X }
+  若倒排已不是 X → 204，不删 Y
+  否则 Lua：ZREM X 的 A；DEL 倒排；退订 article:{X}；推快照
+  current_article(A) = None
+
+关页
+  sendBeacon POST /presence/leave   （空 body，Cookie，无 CSRF 头）
+  按倒排离开；失败则等租约
 ```
 
 **快照成员（读时计算角色，不冻结）：**
@@ -174,14 +223,27 @@ A 回列表
 **租约到期：**
 
 ```text
-lease 键消失（TTL 或主动 leave）
-  若 presence:user:{U} 仍指向 X
-    从 presence:article:{X} 去掉 U
-    删除 presence:user:{U}
-    推 article:{X} 快照
+不另做扫全库 worker。join / leave / list / count / is_present / heartbeat：
+  ids = ZRANGEBYSCORE presence:article:{X} -inf now
+  对每个 id：若 presence:user == X 则 DEL 倒排
+  ZREMRANGEBYSCORE -inf now
+  活着的人还要 GET 倒排 == X，否则 ZREM（防 STRING 先过期）
+  若确实裁掉了人，再推 snapshot
 ```
 
-读 `is_present` 时若 lease 已无，视为不在场，并可顺便清理（惰性删）。不另做分钟级全表扫，除非实现需要补偿。
+`ZREMRANGEBYSCORE` 只返回数量，禁止「裁完却不知道删了谁」。换文 join 用 Lua，不要用 MULTI 假装能分支。
+
+`is_present(U, X)` 两边都要成立，缺一边即假并修复：
+
+```text
+GET presence:user:{U} == X
+且 ZSCORE presence:article:{X} U 存在且 > now
+否则 false：
+  倒排指向 X 但 ZSET 已过期 → DEL 倒排、ZREM
+  ZSET 有 U 但倒排不是 X   → ZREM（幽灵）
+```
+
+不信任 keyspace 通知当离场信号。不扫全站用户来回答「这篇上还有谁」。
 
 **进房：**
 
@@ -192,9 +254,9 @@ room 创建成功（非本期实现）
   两人从该文邀请列表消失
 ```
 
-**等价形态：** HTTP join 与 WS `presence.join` 写同一套 key。重复 join 同一篇 = 续租 + 保证在集合中，幂等。
+**等价形态：** 同一篇重复 `presence.join` = 续租 + 保证在集合中 + 保证已订阅，幂等。HTTP `POST /presence/leave` 空 body 与 WS leave（倒排指向该文时）写同一套 key。
 
-**无效：** 未登录 join；`banned` join；文章不存在；匿名连业务 WS；把 `GET /articles/{id}` 当 join；`GET /invites` 当候选人列表。均失败或不得写入。
+**无效：** 未登录 join；`banned` join；文章不存在；匿名连业务 WS；把 `GET /articles/{id}` 当 join；HTTP join 后再 WS join；`GET /invites` 当候选人列表；leave 不带旧文 id 却用于换路由。均失败或不得写入。
 
 ### 6.4 Boundary Cases
 
@@ -203,13 +265,17 @@ room 创建成功（非本期实现）
 | 未登录读详情 | 200 地图；无 join；`GET .../presence` 未认证 |
 | 已登录未 join | 不在名单；invite 创建失败（对方/自己不在场） |
 | 详情预取 / 连打两次 GET | 不产生两条在场；只有 join 才写 |
-| 关页来不及 WS | `navigator.sendBeacon` → `POST /presence/leave`；否则等 TTL |
-| 心跳丢失超过租约 | 离场并推快照 |
-| 换文 | join 新文前 leave 旧文；旧文频道推离场 |
-| 第二浏览器登录 | identity 踢旧 session → 旧连接失效 → leave 或等 TTL |
+| 关页来不及 WS | `sendBeacon POST /presence/leave` 空 body + Cookie，无 CSRF 头；失败等租约 |
+| WS / 网络闪断 | **不** leave；重连后仍在该路由则再 `presence.join` |
+| 路由 X→Y 的迟到 leave | 必须带 `article_id=X`；倒排已是 Y 则 no-op |
+| Strict Mode 假卸载 | 仍是当前路由则 cleanup 不发 leave |
+| 心跳丢失超过租约 | 离场并推快照（须先取出过期 id） |
+| 换文 | Lua：ZREM 旧文再 join 新文；旧文频道推离场 |
+| heartbeat 409 | 仍在该文章路由 → 再 join；已离开 → 停心跳，禁止自动复活 |
+| 第二浏览器登录 | identity 踢旧 session；旧连接死，新 join 覆盖倒排；旧 ZSET 靠换文 Lua 或租约 |
 | 冷启动未入驻作者 | 无 `users` 行，不能 join，不能出现在名单 |
 | 作者在自己文下 join | 可以；`role=author`；可被邀、可主动邀 |
-| 隐藏标签仍开着详情 | **仍在场**；继续心跳。离开指路由/关页/进房，不是 `visibilitychange=hidden` |
+| 后台 / 隐藏标签 | **不保证**仍在场（浏览器会节流 timer）；`visibility=visible` 立刻心跳或 join。Demo 用两台前台窗口 |
 | 名单超过 `LIST_MAX` | `count` 仍准；`members` 截断（实现可稳定排序，如 join 时间） |
 | 进房后文章页仍挂着 | 仍须 leave 文下集合；房内不等于可邀请 |
 | 封禁 / 登出 | 立刻 `PresenceWriter.leave` |
@@ -222,10 +288,12 @@ room 创建成功（非本期实现）
 | 未认证 join / leave / heartbeat / 快照 | 未认证，不写 Redis |
 | `status != active` | 与未登录相同；清理租约 |
 | 文章不存在 | 404，不 join |
-| heartbeat 时无人场 | 409；客户端应重新 join 或停心跳 |
-| leave 无人场 | 幂等 204 |
+| heartbeat 时无人场 | 409；仅当客户端仍在该文章路由才再 join |
+| leave 无人场 / 倒排已不是该文 | 幂等 204 |
+| `POST /presence/leave` 要求 CSRF 头导致 sendBeacon 失败 | 视为缺陷；该路由只校 Cookie |
 | 快照 / 推送出现密钥 | 视为缺陷 |
 | 心跳打知乎 / LLM | 视为缺陷 |
+| ORM 连接绑在 WS 上 | 视为缺陷 |
 
 ## 8. Compatibility
 
@@ -253,18 +321,35 @@ room 创建成功（非本期实现）
 
 MVP 一用户一 session、一连接。多篇会让「当前在哪」对 invite 含糊。换文即换集合。
 
+### 9.6 文章侧用 SET / HASH / LIST，而不是 ZSET
+
+进进出出的难点不是「内存还是磁盘」，是 **成员带过期时间**。Redis `SET` 增删 O(1)，但 member 不能单独过期，心跳漏了会变成幽灵，invite 会误判仍在场。`LIST` 删除是 O(n) 且易重复。`HASH`（field=用户，value=到期时间）能滤过期，但每次都要 `HGETALL` 再逐个删。`ZSET` 的 score 就是到期时间：`ZADD` 进场/续命，`ZREM` 离场，`ZREMRANGEBYSCORE` 一次裁掉过期，`ZRANGEBYSCORE` / `ZCOUNT` 只返回还活着的人。这才是「这篇上还有谁」的存储形态。不靠 Pub/Sub 当存储（不能 `is_present`），也不把整篇名单序列化成一条 JSON 覆盖写。
+
+### 9.7 只保留其中一份索引
+
+只有 `presence:article`：leave / 心跳 / 进房不知道人在哪篇，只能扫所有文章 ZSET。只有 `presence:user`：要列出一篇上的人只能扫全部用户。邀请和同地图匹配问的是「这篇上还有谁」，leave 问的是「这人在哪篇」。两份都是主键，禁止做成可丢的缓存。
+
+### 9.8 WS 断开即 leave
+
+闪断会把邀请列表抖空。在场绑租约，不绑 TCP。断线只丢推送。
+
 ## 10. Testing Strategy
 
 | 用例 | 方法 |
 |---|---|
-| GET 详情不写 Redis；随后 join 才出现 | HTTP 契约 |
+| GET 详情不写 Redis；随后 WS join 才出现 | HTTP + WS 契约 |
 | 未登录 / banned 不能 join | 中间件 |
-| 两人 join 同一篇，快照互见；leave 后对方消失 | 单测 Redis |
-| 换文：旧文集去掉、新文集加入 | 单测 |
-| 租约到期后 `is_present` 为假 | 时间夹具 |
-| heartbeat 续租；无人场 heartbeat 为 409 | 单测 |
+| 两人 join 同一篇，`list` 互见；leave 后对方从该文 ZSET 消失，倒排删除 | 单测 Redis |
+| 换文：倒排从 Y 改为 X；Y 的 ZSET 去掉、X 加入；迟到 leave(Y) 不删 X | 单测 |
+| `list` 不含倒排已不是该文的幽灵；与 `is_present` 一致 | 单测 |
+| 裁过期先取出 member 再删倒排，禁止只 ZREMRANGEBYSCORE | Lua 夹具 |
+| 只写 ZSET 不写倒排（或反过来）则 `is_present` 为假并修复 | 单测 |
+| 租约到期后 `is_present` 为假，两边都清掉 | 时间夹具 |
+| heartbeat 无倒排为 409；有倒排则续 ZSET score | 单测 |
+| WS 断开后键仍在；重连 join 幂等 | 单测 |
 | 心跳路径无知乎 / LLM mock 调用 | 调用计数 |
-| `PresenceReader` 给 invite：不在场则 false | mock 对倒 |
+| invite：`list` 里的人才可被邀；不在场 `is_present` 为假 | 与 invite 夹具对照 |
+| 空 body leave 不需 CSRF 头 | HTTP 契约 |
 | 登出 / 封禁触发 leave | 与 identity 夹具 |
 | 推送只到 `article:{id}`，无全站频道 | realtime 假实现断言 |
 | 响应无密钥 | 契约夹具 |
@@ -274,25 +359,40 @@ MVP 一用户一 session、一连接。多篇会让「当前在哪」对 invite 
 | 区域 | 变更 |
 |---|---|
 | 本文 | 冻结 presence 契约；后续 `feat` 按此实现 |
-| 以后才写的代码 | Redis 三键；`PresenceService`；HTTP 四路由；WS 帧；租约过期清理 |
+| 以后才写的代码 | Lua 双索引；WS join/leave/heartbeat；`GET` 快照；空 body leave |
 | 不改 | identity 协议、`articles` 表、invite 状态机、前端仓库（前端按本契约在详情 2xx 后 join） |
 | 不建 | `article_readers` 表、在场历史、全局在线表 |
 
-实现顺序：Redis key 与租约 → join/leave 幂等 → 快照 HTTP → WS 订阅与推送 → heartbeat → 接到 identity 登出 / 封禁。缺 session 不要 join。
+实现顺序：Lua 成对写 ZSET+STRING → WS join/leave 与订阅 → 快照 GET 与 `list` 过滤倒排 → heartbeat 与裁过期 → sendBeacon leave → identity 登出 / 封禁。缺 session 不要 join。缺倒排不要假装能 leave。
 
 ---
 
 ## Data model
 
-Postgres **不加表**。热状态只在 Redis。
+Postgres **不加表**。热状态只在 Redis。**两份索引都是权威数据**，一起构成「用户 — 文章 — 用户」在场边。
 
 ```text
-presence:user:{user_id}       值 = article_id        当前在哪篇
-presence:lease:{user_id}      TTL = LEASE_SEC        租约；消失即离场
-presence:article:{article_id} SET of user_id         该文在场集合
+presence:article:{article_id}   ZSET          # 正排：这篇上还有谁
+  member = user_id
+  score  = lease_expire_at（unix 秒）
+  活着：score > now
+  进场/心跳：ZADD（同 member 覆盖 score）
+  离场：ZREM
+  过期：先 ZRANGEBYSCORE -inf now 取出 id，再 ZREMRANGEBYSCORE
+  回答：可邀请 / 同地图候选 / 快照 / count
+
+presence:user:{user_id}         STRING        # 倒排：这个人现在在哪篇
+  值 = article_id
+  TTL = LEASE_SEC（与 ZSET score 同一租约）
+  进场：SET EX；心跳：EXPIRE；离场：DEL
+  回答：一人一篇、leave 找回旧文、heartbeat 当前篇、进房清场
 ```
 
-不把 `display_name` 复制进 Redis；快照时读 `users`（人数上限内可接受）。不把 `status` 复制进邀请表。
+join / leave / heartbeat / 过期裁剪必须同一段 Lua 改两边。禁止只维护 ZSET、把 STRING 当可重建缓存。禁止用 `MULTI` 做换文分支。裁过期必须先 `ZRANGEBYSCORE` 拿到 id。
+
+`list` / 快照 / `count` 的成员集合 = score>now **且** 倒排指向该文。`count` 不是裸 `ZCARD`。
+
+不把 `display_name` 复制进 ZSET；快照时短查 `users`，立刻释放连接。不把在场抄进 `invites` / `matches`。
 
 不建：`article_readers`、`presence_events` 流水、`metadata JSONB`。
 
@@ -300,8 +400,9 @@ presence:article:{article_id} SET of user_id         该文在场集合
 
 | 挂钩 | 谁写 | 谁读 |
 |---|---|---|
-| `is_present` | presence | invite 创建与 accept |
-| 文下名单 | presence | 详情页；**不是** `GET /invites` |
+| `list(article_id)` | presence | 详情邀请列表；日后同地图匹配候选；**不是** `GET /invites` |
+| `is_present` | presence | invite 创建与 accept（两边索引一致） |
+| `current_article` | presence | leave / 进房 / 封禁；日后若问「这人在哪篇」 |
 | `count` | presence | 日后 `FeedRanker`；不反写 articles |
 | `PresenceWriter.leave` | presence | room 进房；identity 登出 / 封禁 |
 
@@ -312,12 +413,14 @@ presence:article:{article_id} SET of user_id         该文在场集合
 ```text
 web  ──GET /articles/{id}──► server.article     （无副作用）
 
-web  ──join/leave/heartbeat──► server.presence ──► Redis
-                              └── realtime article:{id}
+web  ──WS presence.join/leave/heartbeat──► server.presence ──► Redis
+                              └── realtime 订/退 article:{id}
 
-web  ──WS 订阅 article:{id}──► 只收 snapshot
+web  ──GET /articles/{id}/presence──► server.presence   （首屏）
+web  ──sendBeacon POST /presence/leave──► server.presence
 
-invite ──PresenceReader.is_present──► server.presence
+详情邀请列表 ──PresenceReader.list────────► server.presence
+invite 握手   ──PresenceReader.is_present──► server.presence
 
 identity 登出/封禁 ──PresenceWriter.leave──► server.presence
 room 进房（非本期）──PresenceWriter.leave──► server.presence
@@ -327,17 +430,19 @@ room 进房（非本期）──PresenceWriter.leave──► server.presence
 |---|---|
 | `identity` | 仅 `active` 可 join；登出 / 封禁必须 leave |
 | `article` | 只认 `articles.id`；读详情不写在场 |
-| `invite` | 只问 `is_present`；不订心跳 |
-| `room` | 进房调用 `leave`；本模块不建房 |
+| `invite` | 候选人来自 `list`；握手问 `is_present`；不订心跳、不抄名单进表 |
+| `match` | 本期不读在场；同地图候选仍来自 `list`，不另建在线集合 |
+| `room` | 进房调用 `leave`（先 `current_article`）；本模块不建房 |
 | `feed` | 可读 `count`；本期不改排序 |
 | `web` | 上表 HTTP + WS 帧 |
-| `worker` | 不消费 presence 专用队列；过期靠 TTL / 惰性删 |
+| `worker` | 不消费 presence 专用队列；过期靠 ZSET score + 读写时裁剪 |
 
 回滚：关掉 join 与业务 WS 即回到「能读文、看不见人」。
 
 ## Open Questions
 
-1. 租约 45s / 心跳 15s 是否偏松。只改配置，不改 key 形状。
+1. 租约 45s / 心跳 15s 是否偏松。只改配置，不改 key 形状。后台标签本来就不保证，不必为它把租约加到数分钟。
 2. 名单截断规则（先 join 优先 vs 随机）。Demo 两人无感；超过 `LIST_MAX` 再定。
 3. 匿名是否展示 `count`（不含成员）。本期快照需登录；摸鱼流人数留给 feed。
-4. 实现用 Redis 7 键过期还是 lease 键 + 惰性删。规格只要求「lease 消失 ≡ 离场」。
+4. ~~实现用 Redis 7 键过期还是 lease 键 + 惰性删。~~ **已收口：** 文章侧 ZSET（score=到期）+ 用户侧 STRING 成对维护；过期先 `ZRANGEBYSCORE` 再删；Lua，不靠 keyspace 通知，不另开扫表 worker。
+5. WS 路径与 ticket 领取挂在 identity / realtime。本模块只要求：同一条连接、join 订文章、leave 退订文章、断线不离场。
