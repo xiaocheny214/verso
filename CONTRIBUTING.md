@@ -87,6 +87,7 @@ ci: enforce commit and branch naming (#2)
 
 ## 提 Issue
 
+- 开 Issue 时选用 [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) 下对应模板（模块提案 `proposal.md`、小改动 `proposal-short.md`、实现 `feat.md`），不要另写一套章节。
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
 - 先确认 [#1](https://github.com/xiaocheny214/verso/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
 - 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
@@ -102,6 +103,7 @@ ci: enforce commit and branch naming (#2)
 
 ## 提 PR
 
+- PR 正文按 [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) 填写。
 - 每个 PR 关联对应 Issue（例如 `Closes #2`），改动范围与 Issue 一致，不夹带无关改动。
 - 合入 `main` 必须走 PR，且必须有至少一人 **Approve**。GitHub 已对 `main` 开保护：作者不能自己点同意，仓库创建者 / 管理员也不能绕过。没有他人 Approve，Merge 按钮不可用。
 - 指向 `main` 的 PR 会检查提交说明与分支名；禁止直推 `main`。
