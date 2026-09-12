@@ -79,7 +79,7 @@ ci: enforce commit and branch naming (#2)
 
 ## 本地开发与联调
 
-当前仓库仍以产品策划与文档为主，应用工程落地后，启动方式写在 README「本地开发」，以当时文档为准。在此之前：
+当前仓库已有后端 workspace 骨架（[#8](https://github.com/xiaocheny214/verso/issues/8)），启动方式见 [`backend/README.md`](backend/README.md)。在此之前：
 
 - 不要假设已有生产 API；本地联调只连本机或组内约定的开发环境，**禁止直连生产或把知乎 Access Secret / OAuth App Key 写入仓库、截图、Issue 或前端**。
 - 知乎开放平台凭证只放在本机环境变量或安全密钥库；PR 里只用占位符。
@@ -110,7 +110,9 @@ ci: enforce commit and branch naming (#2)
 
 ## 接口契约
 
-工程尚未冻结 OpenAPI。接口代码出现后，前后端以仓库内唯一契约文件为准（计划为根目录或 `docs/` 下由代码生成的 OpenAPI，禁止长期手写两套）。
+工程尚未冻结 OpenAPI。接口代码出现后，前后端以仓库内唯一契约文件为准（由 `verso_app.web` 生成，禁止长期手写两套）。
+
+后端是 uv workspace：`verso-common` → `verso-framework` → `verso-app`。领域逻辑只放 `server`。局内提示词与管线放 `server.llm_pipeline`；`server` 内模块同层可互相调用。`web` / `worker` 只调 `server`，不直连 LLM 提供方。分层由 import-linter 约束包边界，不要为了图快让 web 去调 framework。
 
 - 变更路由、参数、模型或描述时，在同一 PR 里更新契约并提交。
 - 契约与实现不一致时，以「先改契约 Issue、再改代码」为序，不要在前端猜字段。

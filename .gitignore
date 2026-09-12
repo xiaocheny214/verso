@@ -8,5 +8,11 @@ dist/
 Thumbs.db
 __pycache__/
 .venv/
+.pytest_cache/
+pytest-cache-files*/
+.ruff_cache/
+*.egg-info/
+.coverage
+.npm-cache/
 .idea/
 .vscode/
