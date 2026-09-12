@@ -1,10 +1,10 @@
 # 参与贡献 / Contributing
 
-欢迎参与 [Wenju（文局）](https://github.com/xiaocheny214/wenju)
+欢迎参与 [Verso（背叶）](https://github.com/xiaocheny214/verso)
 
 项目按 `Proposal → Issue → 分支 → PR → Review → 合并` 推进：所有改动从 Issue 出发，代码经 PR 合入 `main`。第一次参与，按本文档顺序读下来即可跑通全流程。
 
-产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/wenju/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
+产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/verso/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
 
 ## 许可
 
@@ -17,7 +17,7 @@
 
 ## 开始之前：克隆、Fork 与上游同步
 
-主仓库：`https://github.com/xiaocheny214/wenju`
+主仓库：`https://github.com/xiaocheny214/verso`
 
 - **已加入协作者、对主仓库有写权限**：直接从 `origin` 拉 `main`、开分支、向主仓库提 PR。
 - **没有写权限**：Fork 到个人账号，开发分支只放在自己的 fork 上，再向主仓库提 PR。
@@ -25,16 +25,16 @@
 Fork 协作时，先把仓库拉到本地并连上上游：
 
 ```bash
-git clone git@github.com:<你的账号>/wenju.git
-cd wenju
-git remote add upstream git@github.com:xiaocheny214/wenju.git
+git clone git@github.com:<你的账号>/verso.git
+cd verso
+git remote add upstream git@github.com:xiaocheny214/verso.git
 ```
 
 有写权限时：
 
 ```bash
-git clone git@github.com:xiaocheny214/wenju.git
-cd wenju
+git clone git@github.com:xiaocheny214/verso.git
+cd verso
 ```
 
 开新分支、提 PR 之前，先同步 `main` 再开分支：
@@ -88,9 +88,9 @@ ci: enforce commit and branch naming (#2)
 ## 提 Issue
 
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
-- 先确认 [#1](https://github.com/xiaocheny214/wenju/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
+- 先确认 [#1](https://github.com/xiaocheny214/verso/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
 - 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
-  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/wenju/issues/1)）
+  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/verso/issues/1)）
   - `feat`：产品功能
   - `bug`：缺陷
   - `ci`：门禁、工作流、提交 / 分支规范
@@ -103,8 +103,9 @@ ci: enforce commit and branch naming (#2)
 ## 提 PR
 
 - 每个 PR 关联对应 Issue（例如 `Closes #2`），改动范围与 Issue 一致，不夹带无关改动。
-- 合入 `main` 必须走 PR，必须获得至少一人 review 同意。指向 `main` 的 PR 会检查提交说明与分支名；在此之外禁止直推 `main`。
-- PR 合并由仓库维护者负责；提交后在 PR 里 @ 一位有写权限的队员即可。
+- 合入 `main` 必须走 PR，且必须有至少一人 **Approve**。GitHub 已对 `main` 开保护：作者不能自己点同意，仓库创建者 / 管理员也不能绕过。没有他人 Approve，Merge 按钮不可用。
+- 指向 `main` 的 PR 会检查提交说明与分支名；禁止直推 `main`。
+- 提交后在 PR 里 @ 一位有写权限的队员来 Approve。合并仍由维护者点 Merge，但前提是已经有人同意。
 - **禁止把未经 review / 未合并的代码部署到演示或生产环境。**
 
 ## 接口契约
