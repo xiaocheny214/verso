@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-给 Verso 加上站内文章池：登录后的 `article.sync` 用知乎 `user/contents` 把授权用户的公开创作 upsert 进 `articles`；池空时用 `zhihu_search` 预填演示文，且 **响应与表都必须带 `source=zhihu_search`**。没有可入池条目时 **不写空行**。本期 **不建评论表**。
+给 Verso 加上站内文章池：登录后的 `article.sync` 用知乎 `user/contents` 把授权用户的公开创作 upsert 进 `articles`；池空时用 `zhihu_search` 预填演示文，且 **响应与表都必须带 `source=zhihu_search`**。没有可入池条目时 **不写空行**。本期 **不建评论表、不建标签表、不实现推荐**。知乎这两条接口 **没有** 标签 / 分类字段；表上预留可空 `topic_key`，供后续 `feed` / 主题模块写，本模块保持 `NULL`。
 
 ## 2. User Stories / Motivation
 
@@ -12,8 +12,9 @@
 - 刚授权的答主，其公开文章 / 回答出现在站内层；作者已入驻，文下可以邀请（仍须在场，由 `presence` 判断）。
 - 刚授权但没有任何公开创作的用户，登录成功、有 `users` 行，流里 **不出现** 空白卡片，库里 **没有** 挂在他名下的空文章。
 - 评审能一眼看出哪些条目来自搜索冷启动：UI 标明来源，未入驻作者不可邀。
+- 摸鱼读者下滑的是同一池子的规则序（站内层优先、新近），不是一人一份兴趣流；个性化推荐与信息茧房的「度」归后续 `feed` 提案。
 
-共同需要：服务端有一份可当房间地图的文章索引，来源可分、身份可对上、空结果可安全忽略。
+共同需要：服务端有一份可当房间地图的文章索引，来源可分、身份可对上、空结果可安全忽略，主键和主题位能被其他模块挂上。
 
 ## 3. Current Workaround
 
@@ -25,7 +26,7 @@
 - 池不足以撑 Demo 时，用 `zhihu_search` 种子冷启动层，列表 / 详情带 `source`。
 - `GET /articles`、`GET /articles/{id}` 能给摸鱼流和地图用；匿名可读。
 - 空列表、缺字段条目、非地图类型一律不落库。
-- 明确不建 `comments` / `article_comments`。
+- 明确不建 `comments` / `article_comments` / 标签表；`articles.id` 稳定，预留 `topic_key`。
 
 ## 5. Out of Scope
 
@@ -33,7 +34,9 @@
 - 未授权拉取任意知乎用户的完整创作；爬 `www.zhihu.com/api/v4`。
 - 关注 / 收藏入池；`pin` / `zvideo` / `question` 入池。
 - 评论楼、精选评论落库、把知乎评论当在场或邀请对象。
-- `FeedRanker` 真实推荐；读者—文章关系表（那是 `presence`）。
+- `FeedRanker` 真实推荐、按用户兴趣过滤、主题归一、embedding。
+- 从标题/摘要在本模块里发明分类；把冷启动关键词当成文章标签。
+- 读者—文章关系表（那是 `presence`）。
 - 站内发布文章；写入知乎。
 - 实现 `presence` / `invite` / `room`。
 
@@ -41,7 +44,7 @@
 
 ### 6.1 Design Rule
 
-**文章池是索引，不是知乎镜像。能当地图的才入库；来源必须可分；评论不是本域。**
+**文章池是索引，不是知乎镜像。能当地图的才入库；来源必须可分；评论和推荐都不是本域。**
 
 ```text
 identity 发 article.sync {user_id}
@@ -49,13 +52,16 @@ identity 发 article.sync {user_id}
   → user/contents（仅 article / answer）
   → 有 Title + 可解析身份 → upsert articles（source=user_contents）
   → Items 空或全不可用 → 成功，零行写入
+  → 不填写 topic_key（接口没有标签）
 
 池仍不够撑 Demo
   → 一次性 zhihu_search 种子
   → source=zhihu_search，UI 必标明
   → 不按昵称把作者判成已入驻
+  → 不把 Query 写成分类
 
-评论数可作快照；评论正文不进 Postgres。
+评论数 / 赞同数可作快照；评论正文不进 Postgres。
+主题键留给后续模块从 title/summary 派生；摸鱼流排序走 feed 端口。
 ```
 
 同一知乎内容一行。冷启动行被作者本人同步到时，**升级**为 `user_contents` 并挂 `author_user_id`，不降级、不复制。
@@ -70,7 +76,7 @@ identity 发 article.sync {user_id}
 
 冷启动 **不是** 新的公开 HTTP。Worker / bootstrap 在池为空（或站内层为零）时跑 `article.seed`，禁止在 `GET /articles` 里现场搜。
 
-包边界：`web.api.articles` 只做 HTTP；用例在 `server.article`；知乎 HTTP 在 `framework.providers.zhihu` 的 Contents / Search 客户端。`web` / `worker` 不直连知乎。`server.feed` 只提供默认 `FeedRanker`（站内层 > 冷启动，再 `synced_at` 倒序）；算法仍是 incoming。
+包边界：`web.api.articles` 只做 HTTP；用例在 `server.article`；知乎 HTTP 在 `framework.providers.zhihu` 的 Contents / Search 客户端。`web` / `worker` 不直连知乎。`server.feed` 只提供默认 `FeedRanker`（站内层 > 冷启动，再 `synced_at` 倒序）；**全员同一序**，不读用户兴趣。推荐算法、主题归一仍是 incoming，由 `feed` 提案改端口，不改 `articles` 主键。
 
 ```text
 VERSO_COLD_START_QUERIES          # 种子关键词；未配置则不搜、不写假文
@@ -89,13 +95,17 @@ SearchClient.search(query, count)
 
 ContentCard / 入池最小集：
   content_type, url, title, summary?, created_at?
-  # user/contents 无作者字段：作者 = 当前 users 行
+  like_count?, comment_count?
+  # user/contents 无作者、无 Topics/Tags：作者 = 当前 users 行
   # 无 ContentID：从 canonical URL 解析；失败则丢弃
+  # 无标签则 topic_key 保持 NULL，禁止用 title 猜
 
 SearchCard：
   content_type, content_id, url, title, summary
   author_name, author_avatar_url
+  vote_up_count?, comment_count?
   # 搜索通常无 author url_token：author_user_id 保持空
+  # 无标签；RankingScore / AuthorityLevel 是当次搜索分，不落库
 ```
 
 `ContentType` 规范成小写。只接受 `article`、`answer`。
@@ -151,6 +161,8 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
   "title": "…",
   "summary": "…",
   "canonical_url": "https://zhuanlan.zhihu.com/p/123",
+  "topic_key": null,
+  "like_count": 40,
   "comment_count": 12,
   "author": {
     "user_id": "uuid",
@@ -164,7 +176,7 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
 
 冷启动条目：`"source": "zhihu_search"`，`author.user_id` 为 `null`，`settled: false`。前端必须展示来源，不能只靠作者昵称暗示入驻。
 
-不返回 Access Secret、OAuth token、搜索 `CommentInfoList`。
+不返回 Access Secret、OAuth token、搜索 `CommentInfoList`、当次 `RankingScore`。`topic_key` 本期恒为 `null`（除非日后其他模块写入）。
 
 **等价形态：** 同一 `(content_type, content_id)` 再次同步 → 更新标题 / 摘要 / `synced_at`，**不**新建 `articles.id`。先搜索、后作者登录同步 → **同一行** `source` 改为 `user_contents`，补上 `author_user_id`。
 
@@ -182,8 +194,10 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
 | 搜索 URL 带 UTM | 入库前剥掉；与授权同步的 canonical URL 对得上则同一行 |
 | 池已有站内层，仍想补搜索 | 不在每次 GET 补；种子只在「不够撑 Demo」的显式 `article.seed` |
 | 读者打开文章 | 不在 `articles` 写阅读关系；交给 `presence` |
-| `comment_count` 变化 | 同步时覆盖快照；不因此建评论行 |
+| `comment_count` / `like_count` 变化 | 同步时覆盖快照；不因此建评论行或标签行 |
 | 搜索带回 `CommentInfoList` | 丢弃，不落库、不进 API |
+| 接口未给 Topics / Tags / 专栏分类 | `topic_key` 保持 NULL；不从 title、种子 Query、作者 headline 发明标签 |
+| 后续 `feed` 改排序 | 只换 `FeedRanker`；不改 `articles.id` / upsert 键 |
 
 入驻作者能否被邀：`settled=true` 只表示作者有 `users` 行。能否出现在邀请列表仍看该 `article_id` 上的在场。
 
@@ -220,6 +234,14 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
 
 「谁在读这篇」是在场，有 TTL，不是所有权。所有权用 `author_user_id` 一列即可。
 
+### 9.5 现在建标签表，或把搜索词 / 标题当分类
+
+`GET /api/v1/user/contents` 与 `GET /api/v1/content/zhihu_search` 的条目都 **没有** Topics、Tags、话题、专栏分类。黑客松故事接口的 `labels` 只属于赛事内容，不能套到授权创作上。爬 v4 取话题超出本期边界。
+
+产品 [#1] 的主题是「标题、摘要收到主题键」，MVP 用同一 `article_id` 同地图，不上 embedding；推荐算法是 incoming。摸鱼习惯要的是可下滑的列表，[#5] 已把默认序写成：站内层、在场人数、最近同步——这是 **全员同一规则序**，不是按兴趣收窄。把个性化做进池子，才是茧房的入口。
+
+因此：本模块不建 `tags` / `article_topics` / 推荐特征表；只预留可空 `topic_key`，由后续模块在有派生规则时再写。多标签若真需要，另开提案加 `article_topics(article_id, …)`，FK 仍是 `articles.id`。
+
 ## 10. Testing Strategy
 
 | 用例 | 方法 |
@@ -231,7 +253,8 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
 | 先搜索后本人同步：同一 `articles.id`，source 升级 | upsert 单测 |
 | 无 grant 不写库、不改他人文 | 与 identity 事件约定对齐 |
 | GET 不触发搜索；未配关键词不调用搜索 | 调用计数 |
-| 响应与仓库无密钥、无 `CommentInfoList` | 契约夹具 |
+| 响应与仓库无密钥、无 `CommentInfoList`；`topic_key` 为 null | 契约夹具 |
+| 同步不把种子 Query 写入 `topic_key` | 单测断言列仍 NULL |
 
 ## 11. Summary of Changes
 
@@ -239,8 +262,8 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
 |---|---|
 | 本文 | 冻结 article 契约；后续 `feat` 按此实现 |
 | 以后才写的代码 | 迁移 `articles`；Contents/Search 客户端；`ArticleService`；3 个 HTTP；消费 `article.sync`；空池 `article.seed` |
-| 不改 | identity 协议、`presence` 状态机、前端仓库（前端只消费 `source`） |
-| 不建 | `comments`、`article_comments`、`user_articles` |
+| 不改 | identity 协议、`presence` 状态机、前端仓库（前端消费 `source`；`topic_key` 可先忽略） |
+| 不建 | `comments`、`article_comments`、`user_articles`、`tags`、`article_topics`、推荐特征表 |
 
 实现顺序：客户端 mock → `articles` 迁移 → upsert / 空跳过 → 事件消费 → 列表详情 → 种子。缺 grant 不要写库。
 
@@ -248,7 +271,7 @@ COUNT(*) articles == 0 或 source=user_contents 的行数为 0
 
 ## Data model
 
-Postgres 只加 **一张** `articles`。不建评论表，不建读者关联表。
+Postgres 只加 **一张** `articles`。不建评论表、标签表、读者关联表。扩展靠稳定主键 + 可空 `topic_key`，不靠 JSON 杂物袋。
 
 ```sql
 CREATE TYPE article_source AS ENUM ('user_contents', 'zhihu_search');
@@ -262,10 +285,12 @@ CREATE TABLE articles (
     canonical_url        TEXT NOT NULL,
     title                TEXT NOT NULL,
     summary              TEXT NOT NULL DEFAULT '',
+    topic_key            TEXT,
     author_user_id       UUID REFERENCES users (id),
     author_url_token     TEXT,
     author_display_name  TEXT NOT NULL,
     author_avatar_url    TEXT,
+    like_count           INTEGER NOT NULL DEFAULT 0,
     comment_count        INTEGER NOT NULL DEFAULT 0,
     published_at         TIMESTAMPTZ,
     synced_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -283,6 +308,9 @@ CREATE INDEX articles_source_synced_idx
 CREATE INDEX articles_author_user_id_idx
     ON articles (author_user_id)
     WHERE author_user_id IS NOT NULL;
+CREATE INDEX articles_topic_key_idx
+    ON articles (topic_key)
+    WHERE topic_key IS NOT NULL;
 ```
 
 | 列 | 含义 |
@@ -291,17 +319,31 @@ CREATE INDEX articles_author_user_id_idx
 | `source` | `user_contents` 站内层；`zhihu_search` 冷启动，UI 必标 |
 | `zhihu_content_type` + `zhihu_content_id` | 知乎身份；upsert 键 |
 | `canonical_url` | 去 UTM 后的原文链接；地图外链 |
-| `title` / `summary` | 地图文案；summary 可空字符串，title 不可空 |
+| `title` / `summary` | 地图文案；也是日后主题派生的原料；summary 可空字符串，title 不可空 |
+| `topic_key` | 站内主题键，**可空**。本模块同步时写 NULL；禁止用知乎没有的 taxonomy 填。后续 `feed` / 主题模块可 UPDATE |
 | `author_user_id` | 已入驻才有；冷启动为 NULL |
 | `author_url_token` | 入驻匹配键；搜索常缺，禁止用昵称补 |
-| `comment_count` | 知乎侧计数快照，**不是**评论实体 |
+| `like_count` / `comment_count` | 知乎侧计数快照（搜索的 `VoteUpCount` 映射到 `like_count`），**不是**评论实体、**不是**推荐特征 |
 
 ```text
 article:sync:{user_id}    TTL=去抖窗口    上次成功同步（含 synced=0）
 article:seed:lock         短 TTL          防止并发种子
 ```
 
-不建：`comments`、`article_comments`、`user_articles`、全文列、推荐特征表。
+不建：`comments`、`article_comments`、`user_articles`、`tags`、`article_topics`、全文列、推荐特征表、`metadata JSONB`。
+
+**给其他模块的挂钩（本期只保证这些，不实现对方逻辑）：**
+
+| 挂钩 | 谁写 | 谁读 |
+|---|---|---|
+| `articles.id` | article | presence / invite / room / match / feed 一律 FK 这一列 |
+| `title` / `summary` / `canonical_url` | article | map、日后主题派生 |
+| `source` / `synced_at` / `like_count` | article | 默认 FeedRanker |
+| `topic_key` | **不是** article；后续主题 / feed 提案 | 日后过滤或多样性 |
+| 在场人数 | presence（热状态） | FeedRanker；不反写进 `articles` |
+| 用户兴趣（关注 / 收藏） | identity 范围外，incoming | 互补策略；挂用户，不挂文章行 |
+
+产品假设 1：用户要的是文下房间，不是更好的推荐流。MVP 摸鱼流 = 同一池、规则序。个性化的「度」若要做，另开 `feed` 提案，并显式处理多样性 / 茧房；本表不预埋用户—文章打分列。
 
 URL 解析（实现时按实测补正则，失败则 skip）：
 
@@ -321,12 +363,14 @@ URL 解析（实现时按实测补正则，失败则 skip）：
 | `worker` | 消费 `article.sync`、跑 `article.seed` |
 | `presence` | 只认 `articles.id`；本模块不写在场 |
 | `invite` / `room` / `map` | 用地图字段；无文章不建房（由它们校验） |
-| `feed` | 默认排序端口；本模块不实现推荐 |
+| `feed` | 默认规则序端口；读本表 + 在场人数。本模块不实现推荐、不填 `topic_key` |
 
 回滚：关掉同步与种子即回到空池。已写入行可留。
 
 ## Open Questions
 
 1. `user/contents` 的 URL 是否还有未覆盖形态。适配器解析失败就丢弃该条；若大量丢弃导致 Demo 无文，再补解析，不改表模型。
-2. Demo 种子关键词不写死在本规格，只走配置。选哪些词由演示脚本另定。
+2. Demo 种子关键词不写死在本规格，只走配置。选哪些词由演示脚本另定。它们不是文章分类。
 3. 平台若日后提供评论列表 API，仍须单独提案；本模块的「不建评论表」不自动放开。
+4. 平台若在 `user/contents` / `zhihu_search` 增加稳定 Topics 字段，再开提案决定写入 `topic_key` 还是 `article_topics`；在那之前保持 NULL。
+5. 摸鱼流要不要加权在场人数，由 `feed` × `presence` 定，不在本模块改表。
