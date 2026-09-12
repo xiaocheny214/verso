@@ -14,3 +14,10 @@ Verso is the other side of a page. Two matching strategies stay in spec until th
 Casual browsing invites from an article. Both sides must accept before a room is created. The article is the map. Rooms expire. Match history stays. A conversation summary is optional to keep. Matching other askers, routing a stated question to answerers, or auto-pairing opposite domains is incoming.
 
 Status: product spec is [`docs/product-proposal.md`](docs/product-proposal.md). Backend layout spec is [`docs/architecture.md`](docs/architecture.md) ([#5](https://github.com/xiaocheny214/verso/issues/5)). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+```text
+frontend/    # React
+backend/     # uv workspace: common → framework → app
+```
+
+Local API: [`backend/README.md`](backend/README.md).

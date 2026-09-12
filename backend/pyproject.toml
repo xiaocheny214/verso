@@ -1,0 +1,47 @@
+# verso uv workspace 根（虚拟工作区，本身不是包）
+# 成员：common / framework / app
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+verso-common = { workspace = true }
+verso-framework = { workspace = true }
+verso-app = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.0",
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+# 分层依赖约束（落地 CI 后用 `lint-imports` 强制）
+# 每层只能依赖其下层；web / worker 同层，互不可依赖
+# server 内业务模块（map、llm_pipeline、room 等）同层，允许互相调用
+[tool.importlinter]
+root_packages = ["verso_common", "verso_framework", "verso_app"]
+
+[[tool.importlinter.contracts]]
+name = "包分层链"
+type = "layers"
+layers = [
+    "verso_app.bootstrap",
+    "verso_app.web | verso_app.worker",
+    "verso_app.server",
+    "verso_framework",
+    "verso_common",
+]
+
+[[tool.importlinter.contracts]]
+name = "web 与 worker 互不依赖"
+type = "independence"
+modules = ["verso_app.web", "verso_app.worker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+    "packages/common/src",
+    "packages/framework/src",
+    "packages/app/src",
+]
