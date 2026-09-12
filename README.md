@@ -16,8 +16,7 @@ Casual browsing invites from an article. Both sides must accept before a room is
 Status: product spec is [`docs/product-proposal.md`](docs/product-proposal.md). Backend layout spec is [`docs/architecture.md`](docs/architecture.md) ([#5](https://github.com/xiaocheny214/verso/issues/5)). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ```text
-frontend/    # React
 backend/     # uv workspace: common → framework → app
 ```
 
-Local API: [`backend/README.md`](backend/README.md).
+Local API: [`backend/README.md`](backend/README.md). Frontend 由前端负责人另开提案与 PR。
