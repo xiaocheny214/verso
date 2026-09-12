@@ -6,6 +6,15 @@
 
 产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/verso/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
 
+用 Agent 参与时，读仓库 [`.agents/skills/verso-contribute`](.agents/skills/verso-contribute)。这是 [Agent Skills](https://agentskills.io) 的跨客户端目录（**`.agents/skills/`**，不是 `.agent`，也不是 `.cursor/skills`）。Cursor、GitHub Copilot、Codex、Gemini CLI 会直接加载。Claude Code 目前只扫 `.claude/skills/`，需要的话在本机链过去，不要把第二份拷进仓库：
+
+```bash
+mkdir -p .claude/skills
+ln -s ../../.agents/skills/verso-contribute .claude/skills/verso-contribute
+```
+
+写提案思考模型另装：[writing-proposals](https://github.com/minorcell/skills/tree/main/skills/writing-proposals)（`npx skills add minorcell/skills`）。
+
 ## 许可
 
 本仓库使用[专有商业许可](LICENSE)。向本仓库提交代码、文档或其他材料，即表示你同意：
