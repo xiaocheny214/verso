@@ -17,9 +17,16 @@ class AppSettings(BaseSettings):
     )
 
     session_cookie: str = "verso_session"
+    session_ttl_sec: int = 7 * 24 * 3600
+    oauth_intent_ttl_sec: int = 600
     zhihu_client_id: str = ""
     zhihu_client_secret: str = ""
+    zhihu_redirect_uri: str = "http://localhost:8000/auth/zhihu/callback"
+    zhihu_access_secret: str = ""
+    public_origin: str = "http://localhost:3000"
+    create_tables: bool = False
     llm_api_key: str = ""
+    llm_base_url: str = ""
     llm_model: str = ""
 
 
