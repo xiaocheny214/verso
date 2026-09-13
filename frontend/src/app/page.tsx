@@ -8,15 +8,15 @@ export default function Home() {
     <AppFrame active="认证">
       <main className="landing-grid">
         <section className="landing-copy" aria-labelledby="landing-title">
-          <p className="context-line">知乎内容提供证据，问题决定这次相遇</p>
+          <p className="context-line">知乎内容作证 · 一个问题开启相遇</p>
           <h1 id="landing-title">
-            你教我一块，
+            别找另一个自己。
             <br />
-            我补你一面。
+            找到能补上彼此的人。
           </h1>
           <p className="lead-copy">
             Verso
-            不把相似的人继续困在一起。它从你授权的知乎内容里理解你能教什么，再寻找一个与你双向互补的人。
+            从你授权的知乎内容里理解你能教什么，再用这一次的具体问题，找到一个与你双向互补的人。
           </p>
           <div className="action-row">
             <Link className="primary-action" href="/profile">
@@ -34,8 +34,8 @@ export default function Home() {
         <section className="landing-visual" aria-label="双向互补关系示意">
           <ReciprocityMark />
           <div className="principle-strip">
-            <span>不是推荐相似</span>
-            <strong>而是找到缺口</strong>
+            <span>林屿想学训练</span>
+            <strong>周衡想做产品</strong>
           </div>
         </section>
       </main>
