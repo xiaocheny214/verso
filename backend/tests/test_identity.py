@@ -263,18 +263,41 @@ def test_contents_failure_still_uses_favorites(db: Session, settings: AppSetting
     assert stable.source == PortraitSource.FAVORITES
 
 
+def test_fetch_failure_keeps_portrait_and_blocks_self_report(
+    db: Session, settings: AppSettings
+) -> None:
+    now = int(datetime.now(UTC).timestamp())
+    zhihu = FakeZhihu(
+        contents=[
+            ZhihuContent("Python 开发笔记", "", "https://x/1", "article", now)
+        ]
+    )
+    service = _service(db, settings, zhihu=zhihu)
+    user = service.complete_login(code="a", nonce=service.start_login().nonce).user
+    stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
+    assert stable is not None
+    assert StrengthTag.PROGRAMMING.value in stable.strengths
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("zhihu down")
+
+    zhihu.list_contents = boom
+    zhihu.list_followees = boom
+    zhihu.list_favorites = boom
+    with pytest.raises(BizException) as sync_exc:
+        service.sync_portrait(user.id)
+    assert sync_exc.value.code == BizCode.INTERNAL_ERROR
+    kept = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
+    assert kept is not None
+    assert StrengthTag.PROGRAMMING.value in kept.strengths
+    assert kept.source == PortraitSource.CONTENTS
+    with pytest.raises(BizException) as report_exc:
+        service.self_report(user, [StrengthTag.FITNESS])
+    assert report_exc.value.code == BizCode.CONFLICT
+
+
 def test_empty_zhihu_data_still_allows_self_report(db: Session, settings: AppSettings) -> None:
-    class AllEmpty(FakeZhihu):
-        def list_contents(self, access_token: str, *, limit: int = 50) -> list[ZhihuContent]:
-            raise RuntimeError("contents down")
-
-        def list_followees(self, access_token: str, *, limit: int = 20) -> list[ZhihuFollowee]:
-            raise RuntimeError("followees down")
-
-        def list_favorites(self, access_token: str, *, limit: int = 50) -> list[ZhihuCollection]:
-            raise RuntimeError("favorites down")
-
-    service = _service(db, settings, zhihu=AllEmpty())
+    service = _service(db, settings, zhihu=FakeZhihu())
     user = service.complete_login(code="a", nonce=service.start_login().nonce).user
     card = service.self_report(user, [StrengthTag.FITNESS])
     stable = next(item for item in card.portraits if item.horizon == PortraitHorizon.STABLE)

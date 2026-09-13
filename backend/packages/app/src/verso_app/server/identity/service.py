@@ -129,15 +129,25 @@ class IdentityService:
         grant = self._store.load_grant(str(user_id))
         if not grant:
             raise BizException("授权已过期，请重新登录", code=BizCode.UNAUTHORIZED)
-        contents = _safe_list("创作", lambda: self._zhihu.list_contents(grant))
-        followees = _safe_list("关注", lambda: self._zhihu.list_followees(grant))
-        favorites = _safe_list("收藏", lambda: self._zhihu.list_favorites(grant))
+        contents = _try_list("创作", lambda: self._zhihu.list_contents(grant))
+        followees = _try_list("关注", lambda: self._zhihu.list_followees(grant))
+        favorites = _try_list("收藏", lambda: self._zhihu.list_favorites(grant))
+        any_ok = contents.ok or followees.ok or favorites.ok
+        all_ok = contents.ok and followees.ok and favorites.ok
+        if not any_ok:
+            logger.warning("知乎画像三路都失败，保留已有画像 user_id=%s", user_id)
+            raise BizException("画像同步失败，请稍后重试", code=BizCode.INTERNAL_ERROR)
         now = datetime.now(UTC)
         recent_start = now - timedelta(days=PORTRAIT_RECENT_DAYS)
-        stable_tags, stable_evidence, stable_source = _from_all(contents, followees, favorites)
-        recent_tags, recent_evidence, recent_source = _from_recent(
-            contents, favorites, recent_start
+        stable_tags, stable_evidence, stable_source = _from_all(
+            contents.items, followees.items, favorites.items
         )
+        recent_tags, recent_evidence, recent_source = _from_recent(
+            contents.items, favorites.items, recent_start
+        )
+        if not all_ok and not stable_tags and not recent_tags:
+            logger.warning("知乎部分接口失败且抽不出擅长，保留已有画像 user_id=%s", user_id)
+            return
         self._upsert_portrait(
             user_id,
             PortraitHorizon.STABLE,
@@ -273,12 +283,18 @@ _OBSERVED_SOURCES = frozenset(
 )
 
 
-def _safe_list(label: str, fn) -> list:
+@dataclass(frozen=True, slots=True)
+class _Fetch:
+    items: list
+    ok: bool
+
+
+def _try_list(label: str, fn) -> _Fetch:
     try:
-        return fn()
+        return _Fetch(items=fn(), ok=True)
     except Exception:
         logger.exception("知乎%s拉取失败，跳过这一路", label)
-        return []
+        return _Fetch(items=[], ok=False)
 
 
 def _portrait_source(*, from_contents: bool, from_favorites: bool) -> PortraitSource:
