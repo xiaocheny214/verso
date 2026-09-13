@@ -8,7 +8,7 @@ from verso_common.result import Response
 from verso_framework.config import get_app_settings
 from verso_framework.db import Base, get_engine
 
-from verso_app.web.api import auth_router, exchange_router, match_router
+from verso_app.web.api import auth_router, exchange_router, match_router, quality_router
 from verso_app.web.handler import register_exception_handlers
 
 
@@ -19,7 +19,10 @@ async def lifespan(_app: FastAPI):
         from verso_app.server.exchange import models as exchange_models  # noqa: F401
         from verso_app.server.identity import models as identity_models  # noqa: F401
         from verso_app.server.match import models as match_models  # noqa: F401
-        from verso_app.server.reputation import models as reputation_models  # noqa: F401
+        from verso_app.server.quality import models as quality_models  # noqa: F401
+        from verso_app.server.reputation import (
+            models as reputation_models,  # noqa: F401
+        )
 
         Base.metadata.create_all(bind=get_engine())
     yield
@@ -40,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(match_router)
     app.include_router(exchange_router)
+    app.include_router(quality_router)
 
     @app.get("/health", include_in_schema=False)
     def health() -> Response[dict[str, str]]:

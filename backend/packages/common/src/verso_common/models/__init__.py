@@ -8,10 +8,10 @@ from verso_common.constants import REPUTATION_INITIAL_SCORE
 from verso_common.enums import (
     Eligibility,
     ExchangeStatus,
+    MatchConditionStatus,
     PortraitHorizon,
     PortraitSource,
     ReviewVerdict,
-    MatchConditionStatus,
     StrengthTag,
 )
 
@@ -90,6 +90,8 @@ class ReviewView(BaseModel):
     reviewer_id: str
     reviewee_id: str
     verdict: ReviewVerdict
+    score: int | None = None
+    reason: str = ""
 
 
 class ReputationView(BaseModel):
