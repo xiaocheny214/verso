@@ -4,7 +4,7 @@ from verso_common.enums import RealtimeChannel
 
 
 class RealtimeBus(Protocol):
-    """按频道扇出。禁止全站广播在场。"""
+    """按频道扇出。匹配通知走 user，对话事件走 exchange。禁止全站广播。"""
 
     async def subscribe(self, channel: RealtimeChannel, key: str, connection_id: str) -> None: ...
 

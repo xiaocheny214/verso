@@ -1,17 +1,22 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+"""framework 配置。
 
+Postgres / Redis 用各自前缀；应用密钥用 ``VERSO_``。
+engine / Redis 客户端懒创建，import 本包不连库。
+"""
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="WENJU_", extra="ignore")
+from verso_framework.config.app import AppSettings, get_app_settings
+from verso_framework.config.database import DatabaseSettings
+from verso_framework.config.redis import RedisSettings
 
-    database_url: str = "postgresql+psycopg://verso:verso@localhost:5432/verso"
-    redis_url: str = "redis://localhost:6379/0"
-    session_cookie: str = "verso_session"
-    zhihu_client_id: str = ""
-    zhihu_client_secret: str = ""
-    llm_api_key: str = ""
-    llm_model: str = ""
+# 兼容旧入口：``from verso_framework.config import get_settings``
+get_settings = get_app_settings
+Settings = AppSettings
 
-
-def get_settings() -> Settings:
-    return Settings()
+__all__ = [
+    "AppSettings",
+    "DatabaseSettings",
+    "RedisSettings",
+    "Settings",
+    "get_app_settings",
+    "get_settings",
+]

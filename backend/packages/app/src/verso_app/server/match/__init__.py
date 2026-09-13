@@ -1,1 +1,1 @@
-"""Match records. Summary persist follows user preferences."""
+"""这次想学什么 + 双向互补配对。配上之后把这一对交给 exchange。"""

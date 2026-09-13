@@ -2,12 +2,14 @@ import asyncio
 
 from verso_app.server.llm_pipeline import TemplateMapPipeline
 from verso_app.server.map import MapService
-from verso_common.enums import ArticleSource, InviteStatus
+from verso_common.constants import REPUTATION_INITIAL_SCORE
+from verso_common.enums import StrengthTag, TicketStatus
 
 
 def test_enums_are_stable() -> None:
-    assert ArticleSource.ZHIHU_SEARCH == "zhihu_search"
-    assert InviteStatus.PENDING == "pending"
+    assert StrengthTag.INTERNET == "互联网"
+    assert TicketStatus.MATCHED == "matched"
+    assert REPUTATION_INITIAL_SCORE == 3
 
 
 def test_template_pipeline_opening_topics() -> None:

@@ -1,14 +1,6 @@
-class VersoError(Exception):
-    """Base error. web 层翻成统一返回，server 只抛这个家族。"""
+"""异常：业务异常基类与大模型调用异常。"""
 
+from verso_common.exceptions.biz import BizException
+from verso_common.exceptions.model import ModelException
 
-class AuthRequired(VersoError):
-    pass
-
-
-class InviteNotAllowed(VersoError):
-    pass
-
-
-class RoomClosed(VersoError):
-    pass
+__all__ = ["BizException", "ModelException"]
