@@ -3,12 +3,12 @@ import asyncio
 from verso_app.server.llm_pipeline import TemplateMapPipeline
 from verso_app.server.map import MapService
 from verso_common.constants import REPUTATION_INITIAL_SCORE
-from verso_common.enums import StrengthTag, TicketStatus
+from verso_common.enums import MatchConditionStatus, StrengthTag
 
 
 def test_enums_are_stable() -> None:
     assert StrengthTag.INTERNET == "互联网"
-    assert TicketStatus.MATCHED == "matched"
+    assert MatchConditionStatus.MATCHED == "matched"
     assert REPUTATION_INITIAL_SCORE == 3
 
 

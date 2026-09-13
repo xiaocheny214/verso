@@ -11,8 +11,8 @@ from verso_common.enums import (
     PortraitHorizon,
     PortraitSource,
     ReviewVerdict,
+    MatchConditionStatus,
     StrengthTag,
-    TicketStatus,
 )
 
 
@@ -35,11 +35,24 @@ class UserCard(BaseModel):
     portraits: list[PortraitView] = Field(default_factory=list)
 
 
-class TicketView(BaseModel):
+class MatchPeerView(BaseModel):
+    id: str
+    name: str
+    avatar_url: str | None = None
+    want_text: str
+    want_tag: StrengthTag
+    strengths: list[StrengthTag] = Field(default_factory=list)
+
+
+class MatchConditionView(BaseModel):
     id: str
     want_text: str
-    want_tag: StrengthTag | None = None
-    status: TicketStatus
+    want_tag: StrengthTag
+    status: MatchConditionStatus
+    pair_id: str | None = None
+    waiting_until: datetime | None = None
+    pair_closes_at: datetime | None = None
+    peer: MatchPeerView | None = None
 
 
 class PairView(BaseModel):
