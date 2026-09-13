@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import "./globals.css";
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
+
 import { QueryProvider } from "@/components/providers/query-provider";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Verso",
+  title: "Verso 背叶",
+  description: "基于知乎内容画像的双向互补匹配。",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="zh-CN">
       <body>
         <QueryProvider>{children}</QueryProvider>
       </body>
