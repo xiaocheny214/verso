@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
@@ -42,6 +42,7 @@ class MatchService:
         if not text:
             raise BizException("请填写这次想学什么", code=BizCode.BAD_REQUEST)
         now = datetime.now(UTC)
+        self.expire_waiting(now)
         self._assert_eligible(user.id, now)
         self._assert_can_enter(user.id, now)
         row = MatchCondition(
@@ -102,6 +103,7 @@ class MatchService:
             .where(
                 MatchCondition.status == MatchConditionStatus.WAITING.value,
                 MatchCondition.user_id != mine.user_id,
+                MatchCondition.pair_id.is_(None),
                 MatchCondition.waiting_until.is_not(None),
                 MatchCondition.waiting_until > now,
             )
@@ -113,13 +115,50 @@ class MatchService:
             if not self._is_eligible(other.user_id, now):
                 continue
             other_strengths = self._strengths(other.user_id)
-            if mine.want_tag in other_strengths and other.want_tag in my_strengths:
-                self._pair(mine, other, now)
+            if mine.want_tag not in other_strengths or other.want_tag not in my_strengths:
+                continue
+            locked = self._lock_waiting(other.id, now)
+            if locked is None:
+                continue
+            if self._claim_pair(mine, locked, now):
                 return
 
-    def _pair(self, left: MatchCondition, right: MatchCondition, now: datetime) -> None:
+    def _lock_waiting(self, condition_id: uuid.UUID, now: datetime) -> MatchCondition | None:
+        stmt = select(MatchCondition).where(
+            MatchCondition.id == condition_id,
+            MatchCondition.status == MatchConditionStatus.WAITING.value,
+            MatchCondition.pair_id.is_(None),
+            MatchCondition.waiting_until.is_not(None),
+            MatchCondition.waiting_until > now,
+        )
+        if self._session.get_bind().dialect.name == "postgresql":
+            stmt = stmt.with_for_update(skip_locked=True)
+        return self._session.scalar(stmt)
+
+    def _claim_pair(self, left: MatchCondition, right: MatchCondition, now: datetime) -> bool:
         pair_id = uuid.uuid4()
         closes_at = now + timedelta(hours=PAIR_WINDOW_HOURS)
+        nested = self._session.begin_nested()
+        result = self._session.execute(
+            update(MatchCondition)
+            .where(
+                MatchCondition.id.in_((left.id, right.id)),
+                MatchCondition.status == MatchConditionStatus.WAITING.value,
+                MatchCondition.pair_id.is_(None),
+            )
+            .values(
+                status=MatchConditionStatus.MATCHED.value,
+                pair_id=pair_id,
+                pair_closes_at=closes_at,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount != 2:
+            nested.rollback()
+            self._session.expire(left)
+            self._session.expire(right)
+            return False
+        nested.commit()
         for row in (left, right):
             row.status = MatchConditionStatus.MATCHED.value
             row.pair_id = pair_id
@@ -130,6 +169,7 @@ class MatchService:
             user_b_id=right.user_id,
             closes_at=closes_at,
         )
+        return True
 
     def _assert_eligible(self, user_id: uuid.UUID, now: datetime) -> None:
         if not self._is_eligible(user_id, now):
@@ -156,6 +196,8 @@ class MatchService:
             select(MatchCondition).where(
                 MatchCondition.user_id == user_id,
                 MatchCondition.status == MatchConditionStatus.WAITING.value,
+                MatchCondition.waiting_until.is_not(None),
+                MatchCondition.waiting_until > now,
             )
         )
         if waiting is not None:

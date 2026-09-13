@@ -225,6 +225,74 @@ def test_waiting_expires(db: Session) -> None:
     assert exc.value.code == BizCode.NOT_FOUND
 
 
+def test_expired_waiting_can_resubmit(db: Session) -> None:
+    service = MatchService(db)
+    alice = _user(db, name="Alice", stable=[StrengthTag.PROGRAMMING])
+    first = service.submit(alice, want_text="想学健身", want_tag=StrengthTag.FITNESS)
+    row = db.get(MatchCondition, UUID(first.id))
+    assert row is not None
+    row.waiting_until = datetime.now(UTC) - timedelta(seconds=1)
+    db.flush()
+    assert service._open_condition(alice.id, datetime.now(UTC)) is None
+    second = service.submit(alice, want_text="还想学理财", want_tag=StrengthTag.FINANCE)
+    assert second.status == MatchConditionStatus.WAITING
+    assert second.id != first.id
+    assert second.want_tag == StrengthTag.FINANCE
+    db.refresh(row)
+    assert row.status == MatchConditionStatus.CANCELLED.value
+
+
+def test_lost_claim_does_not_overwrite_pair_id(db: Session) -> None:
+    exchange = FakeExchange()
+    service = MatchService(db, exchange=exchange)
+    alice = _user(db, name="Alice", stable=[StrengthTag.FITNESS])
+    bob = _user(db, name="Bob", stable=[StrengthTag.INTERNET, StrengthTag.PROGRAMMING])
+    carol = _user(db, name="Carol", stable=[StrengthTag.INTERNET])
+    service.submit(alice, want_text="想了解互联网", want_tag=StrengthTag.INTERNET)
+    bob_view = service.submit(bob, want_text="徒手怎么练", want_tag=StrengthTag.FITNESS)
+    assert bob_view.status == MatchConditionStatus.MATCHED
+    original_pair = UUID(bob_view.pair_id) if bob_view.pair_id else None
+    assert original_pair is not None
+    carol_view = service.submit(carol, want_text="也想学健身", want_tag=StrengthTag.FITNESS)
+    assert carol_view.status == MatchConditionStatus.WAITING
+    alice_row = db.scalars(select(MatchCondition).where(MatchCondition.user_id == alice.id)).one()
+    carol_row = db.scalars(select(MatchCondition).where(MatchCondition.user_id == carol.id)).one()
+    claimed = service._claim_pair(carol_row, alice_row, datetime.now(UTC))
+    assert claimed is False
+    db.refresh(alice_row)
+    db.refresh(carol_row)
+    assert alice_row.pair_id == original_pair
+    assert alice_row.status == MatchConditionStatus.MATCHED.value
+    assert carol_row.status == MatchConditionStatus.WAITING.value
+    assert carol_row.pair_id is None
+    assert len(exchange.opened) == 1
+
+
+def test_skipped_lock_pairs_next_candidate(db: Session) -> None:
+    service = MatchService(db)
+    alice = _user(db, name="Alice", stable=[StrengthTag.FITNESS])
+    bob = _user(db, name="Bob", stable=[StrengthTag.FITNESS])
+    dave = _user(db, name="Dave", stable=[StrengthTag.INTERNET])
+    service.submit(alice, want_text="想了解互联网", want_tag=StrengthTag.INTERNET)
+    service.submit(bob, want_text="也想了解互联网", want_tag=StrengthTag.INTERNET)
+    original = service._lock_waiting
+
+    def skip_alice(condition_id: UUID, now: datetime) -> MatchCondition | None:
+        row = db.get(MatchCondition, condition_id)
+        if row is not None and row.user_id == alice.id:
+            return None
+        return original(condition_id, now)
+
+    service._lock_waiting = skip_alice  # type: ignore[method-assign]
+    matched = service.submit(dave, want_text="徒手怎么练", want_tag=StrengthTag.FITNESS)
+    assert matched.status == MatchConditionStatus.MATCHED
+    assert matched.peer is not None
+    assert matched.peer.id == str(bob.id)
+    alice_row = db.scalars(select(MatchCondition).where(MatchCondition.user_id == alice.id)).one()
+    assert alice_row.status == MatchConditionStatus.WAITING.value
+    assert alice_row.pair_id is None
+
+
 def test_submit_via_http(db: Session) -> None:
     alice = _user(db, name="Alice", stable=[StrengthTag.PROGRAMMING])
     service = MatchService(db)
