@@ -32,7 +32,16 @@ HTTP 统一返回 `{code, message, data}`，HTTP 状态码恒 200，业务对错
 - `POST /match/conditions/cancel` 仅取消 `waiting`
 - 条件表没有 `strengths`；`covers` 用 `stable ∪ recent_7d`
 
-本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用起来时会建 `users` / `portraits` / `reputations` / `match_conditions`。
+交换（[#31](https://github.com/xiaocheny214/verso/issues/31)）：
+
+- 配对成功后 `exchange.open` 记下这一对（`exchanges.id` = `pair_id`）
+- `GET /exchanges/me` 会话列表；对方擅长现读画像，对方 want 读匹配条件
+- `GET /exchanges/{id}` / `GET /exchanges/{id}/messages`
+- `POST /exchanges/{id}/messages` 多轮留言；到期或关闭后不能再发
+- `POST /exchanges/{id}/close` 任一方结束
+- 消息只属于这一对，不另存一份「我和谁配上了」
+
+本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用起来时会建 `users` / `portraits` / `reputations` / `match_conditions` / `exchanges` / `messages`。
 
 入口：
 

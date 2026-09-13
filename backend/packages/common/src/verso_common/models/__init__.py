@@ -72,6 +72,7 @@ class ExchangeView(BaseModel):
     user_b_id: str
     status: ExchangeStatus
     opened_at: datetime
+    closes_at: datetime
     closed_at: datetime | None = None
 
 

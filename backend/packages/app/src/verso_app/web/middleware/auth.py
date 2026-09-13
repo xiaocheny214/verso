@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from verso_app.server.exchange.service import ExchangeService
 from verso_app.server.identity.models import User
 from verso_app.server.identity.service import IdentityService
 from verso_app.server.identity.session_store import SessionStore
@@ -35,7 +36,11 @@ IdentityDep = Annotated[IdentityService, Depends(get_identity_service)]
 
 
 def get_match_service(session: SessionDep) -> MatchService:
-    return MatchService(session=session)
+    return MatchService(session=session, exchange=ExchangeService(session))
+
+
+def get_exchange_service(session: SessionDep) -> ExchangeService:
+    return ExchangeService(session)
 
 
 def get_current_user(request: Request, identity: IdentityDep) -> User:
