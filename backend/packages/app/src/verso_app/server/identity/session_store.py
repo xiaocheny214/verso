@@ -25,6 +25,9 @@ class SessionStore:
 
     def consume_intent(self, nonce: str) -> bool:
         key = f"oauth:intent:{nonce}"
+        getter = getattr(self._redis, "getdel", None)
+        if callable(getter):
+            return bool(getter(key))
         if not self._redis.get(key):
             return False
         self._redis.delete(key)

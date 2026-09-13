@@ -23,7 +23,7 @@ HTTP 统一返回 `{code, message, data}`，HTTP 状态码恒 200，业务对错
 - `POST /auth/logout`
 - `GET /me`
 - `POST /me/portrait/sync`
-- `POST /me/portrait/self-report`（仅稳定画像为空时）
+- `POST /me/portrait/self-report`（创作和收藏都抽不出擅长时才允许）
 
 本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用起来时会建 `users` / `portraits` / `reputations`。
 

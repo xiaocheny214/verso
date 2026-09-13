@@ -61,7 +61,12 @@ class IdentityService:
         self._settings = settings
 
     def start_login(self) -> LoginStart:
-        if not self._settings.zhihu_client_id or not self._settings.zhihu_client_secret:
+        if not (
+            self._settings.zhihu_client_id
+            and self._settings.zhihu_client_secret
+            and self._settings.zhihu_access_secret
+            and self._settings.zhihu_redirect_uri
+        ):
             raise BizException("未配置知乎登录", code=BizCode.INTERNAL_ERROR)
         nonce = self._store.put_intent(self._settings.oauth_intent_ttl_sec)
         return LoginStart(
@@ -124,19 +129,21 @@ class IdentityService:
         grant = self._store.load_grant(str(user_id))
         if not grant:
             raise BizException("授权已过期，请重新登录", code=BizCode.UNAUTHORIZED)
-        contents = self._zhihu.list_contents(grant)
-        followees = self._zhihu.list_followees(grant)
-        collections = self._zhihu.list_collections(grant)
+        contents = _safe_list("创作", lambda: self._zhihu.list_contents(grant))
+        followees = _safe_list("关注", lambda: self._zhihu.list_followees(grant))
+        favorites = _safe_list("收藏", lambda: self._zhihu.list_favorites(grant))
         now = datetime.now(UTC)
         recent_start = now - timedelta(days=PORTRAIT_RECENT_DAYS)
-        stable_tags, stable_evidence = _from_all(contents, followees, collections)
-        recent_tags, recent_evidence = _from_recent(contents, collections, recent_start)
+        stable_tags, stable_evidence, stable_source = _from_all(contents, followees, favorites)
+        recent_tags, recent_evidence, recent_source = _from_recent(
+            contents, favorites, recent_start
+        )
         self._upsert_portrait(
             user_id,
             PortraitHorizon.STABLE,
             stable_tags,
             stable_evidence,
-            source=PortraitSource.CONTENTS,
+            source=stable_source,
             window_start=None,
             window_end=None,
             synced_at=now,
@@ -146,7 +153,7 @@ class IdentityService:
             PortraitHorizon.RECENT_7D,
             recent_tags,
             recent_evidence,
-            source=PortraitSource.CONTENTS,
+            source=recent_source,
             window_start=recent_start,
             window_end=now,
             synced_at=now,
@@ -154,8 +161,12 @@ class IdentityService:
 
     def self_report(self, user: User, tags: list[StrengthTag]) -> UserCard:
         stable = self._session.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
-        if stable is not None and stable.strengths and stable.source == PortraitSource.CONTENTS:
-            raise BizException("已有创作画像，不能自报覆盖", code=BizCode.CONFLICT)
+        if (
+            stable is not None
+            and stable.strengths
+            and stable.source in _OBSERVED_SOURCES
+        ):
+            raise BizException("已有知乎画像，不能自报覆盖", code=BizCode.CONFLICT)
         now = datetime.now(UTC)
         unique = list(dict.fromkeys(tags))
         self._upsert_portrait(
@@ -257,53 +268,87 @@ def _to_view(row: Portrait) -> PortraitView:
     return PortraitView(horizon=PortraitHorizon(row.kind), strengths=strengths)
 
 
+_OBSERVED_SOURCES = frozenset(
+    {PortraitSource.CONTENTS.value, PortraitSource.FAVORITES.value}
+)
+
+
+def _safe_list(label: str, fn) -> list:
+    try:
+        return fn()
+    except Exception:
+        logger.exception("知乎%s拉取失败，跳过这一路", label)
+        return []
+
+
+def _portrait_source(*, from_contents: bool, from_favorites: bool) -> PortraitSource:
+    if from_contents:
+        return PortraitSource.CONTENTS
+    if from_favorites:
+        return PortraitSource.FAVORITES
+    return PortraitSource.CONTENTS
+
+
 def _from_all(
     contents: list[ZhihuContent],
     followees: list[ZhihuFollowee],
-    collections: list[ZhihuCollection],
-) -> tuple[list[StrengthTag], list[dict]]:
+    favorites: list[ZhihuCollection],
+) -> tuple[list[StrengthTag], list[dict], PortraitSource]:
     tags: list[StrengthTag] = []
     evidence: list[dict] = []
+    from_contents = False
+    from_favorites = False
     for item in contents:
         hit = tags_from_text(item.title, item.summary)
         if hit:
+            from_contents = True
             _extend_unique(tags, hit)
             _push_evidence(evidence, item.title, item.url, item.content_type)
-    for item in collections:
-        hit = tags_from_text(item.title, item.summary)
+    for item in favorites:
+        hit = tags_from_text(item.title, item.summary, item.extra_text)
         if hit:
+            from_favorites = True
             _extend_unique(tags, hit)
             _push_evidence(evidence, item.title, item.url, "collection")
     for item in followees:
         hit = tags_from_text(item.fullname, item.headline)
         if hit:
+            from_contents = True
             _extend_unique(tags, hit)
-    return tags, evidence[:5]
+    return tags, evidence[:5], _portrait_source(
+        from_contents=from_contents, from_favorites=from_favorites
+    )
 
 
 def _from_recent(
     contents: list[ZhihuContent],
-    collections: list[ZhihuCollection],
+    favorites: list[ZhihuCollection],
     recent_start: datetime,
-) -> tuple[list[StrengthTag], list[dict]]:
+) -> tuple[list[StrengthTag], list[dict], PortraitSource]:
     start_ts = int(recent_start.timestamp())
     tags: list[StrengthTag] = []
     evidence: list[dict] = []
+    from_contents = False
+    from_favorites = False
     for item in contents:
         if item.created_at < start_ts:
             continue
         hit = tags_from_text(item.title, item.summary)
         if hit:
+            from_contents = True
             _extend_unique(tags, hit)
             _push_evidence(evidence, item.title, item.url, item.content_type)
-    for item in collections:
+    for item in favorites:
         if item.fav_time < start_ts:
             continue
-        hit = tags_from_text(item.title, item.summary)
+        hit = tags_from_text(item.title, item.summary, item.extra_text)
         if hit:
+            from_favorites = True
             _extend_unique(tags, hit)
             _push_evidence(evidence, item.title, item.url, "collection")
-    return tags, evidence[:5]
+    return tags, evidence[:5], _portrait_source(
+        from_contents=from_contents, from_favorites=from_favorites
+    )
 
 
 def _extend_unique(bucket: list[StrengthTag], found: list[StrengthTag]) -> None:

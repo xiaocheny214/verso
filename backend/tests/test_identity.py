@@ -41,6 +41,9 @@ class FakeRedis:
     def get(self, name: str) -> str | None:
         return self.values.get(name)
 
+    def getdel(self, name: str) -> str | None:
+        return self.values.pop(name, None)
+
     def delete(self, *names: str) -> None:
         for name in names:
             self.values.pop(name, None)
@@ -79,7 +82,7 @@ class FakeZhihu:
     def list_followees(self, access_token: str, *, limit: int = 20) -> list[ZhihuFollowee]:
         return self.followees
 
-    def list_collections(self, access_token: str, *, limit: int = 20) -> list[ZhihuCollection]:
+    def list_favorites(self, access_token: str, *, limit: int = 50) -> list[ZhihuCollection]:
         return self.collections
 
 
@@ -101,6 +104,7 @@ def settings() -> AppSettings:
     return AppSettings(
         zhihu_client_id="app",
         zhihu_client_secret="secret",
+        zhihu_access_secret="platform-secret",
         zhihu_redirect_uri="http://localhost:8000/auth/zhihu/callback",
         public_origin="http://localhost:3000",
         create_tables=False,
@@ -218,6 +222,64 @@ def test_login_url_sets_intent_cookie(db: Session, settings: AppSettings) -> Non
     assert body["code"] == 200
     assert "authorize_url" in body["data"]
     assert "verso_oauth_intent" in response.cookies
+
+
+def test_portrait_from_favorites_when_no_posts(db: Session, settings: AppSettings) -> None:
+    now = int(datetime.now(UTC).timestamp())
+    zhihu = FakeZhihu(
+        collections=[
+            ZhihuCollection("徒手健身入门", "", "https://x/fav", now, extra_text="力量训练")
+        ]
+    )
+    service = _service(db, settings, zhihu=zhihu)
+    user = service.complete_login(code="a", nonce=service.start_login().nonce).user
+    stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
+    recent = db.get(Portrait, (user.id, PortraitHorizon.RECENT_7D.value))
+    assert stable is not None
+    assert StrengthTag.FITNESS.value in stable.strengths
+    assert stable.source == PortraitSource.FAVORITES
+    assert recent is not None
+    assert StrengthTag.FITNESS.value in recent.strengths
+    assert recent.source == PortraitSource.FAVORITES
+    with pytest.raises(BizException) as exc:
+        service.self_report(user, [StrengthTag.PROGRAMMING])
+    assert exc.value.code == BizCode.CONFLICT
+
+
+def test_contents_failure_still_uses_favorites(db: Session, settings: AppSettings) -> None:
+    class ContentsDown(FakeZhihu):
+        def list_contents(self, access_token: str, *, limit: int = 50) -> list[ZhihuContent]:
+            raise RuntimeError("contents down")
+
+    now = int(datetime.now(UTC).timestamp())
+    zhihu = ContentsDown(
+        collections=[ZhihuCollection("Python 开发笔记", "", "https://x/fav", now)]
+    )
+    service = _service(db, settings, zhihu=zhihu)
+    user = service.complete_login(code="a", nonce=service.start_login().nonce).user
+    stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
+    assert stable is not None
+    assert StrengthTag.PROGRAMMING.value in stable.strengths
+    assert stable.source == PortraitSource.FAVORITES
+
+
+def test_empty_zhihu_data_still_allows_self_report(db: Session, settings: AppSettings) -> None:
+    class AllEmpty(FakeZhihu):
+        def list_contents(self, access_token: str, *, limit: int = 50) -> list[ZhihuContent]:
+            raise RuntimeError("contents down")
+
+        def list_followees(self, access_token: str, *, limit: int = 20) -> list[ZhihuFollowee]:
+            raise RuntimeError("followees down")
+
+        def list_favorites(self, access_token: str, *, limit: int = 50) -> list[ZhihuCollection]:
+            raise RuntimeError("favorites down")
+
+    service = _service(db, settings, zhihu=AllEmpty())
+    user = service.complete_login(code="a", nonce=service.start_login().nonce).user
+    card = service.self_report(user, [StrengthTag.FITNESS])
+    stable = next(item for item in card.portraits if item.horizon == PortraitHorizon.STABLE)
+    assert stable.strengths[0].tag == StrengthTag.FITNESS
+    assert stable.strengths[0].source == PortraitSource.SELF_REPORTED
 
 
 def test_user_id_is_uuid(db: Session, settings: AppSettings) -> None:

@@ -21,9 +21,10 @@ class StrengthTag(StrEnum):
 
 
 class PortraitSource(StrEnum):
-    """擅长从哪来。有创作证据时以创作为准，空号才允许自报。"""
+    """擅长从哪来。创作优先，否则用收藏；都没有才允许自报。"""
 
     CONTENTS = "contents"
+    FAVORITES = "favorites"
     SELF_REPORTED = "self_reported"
 
 

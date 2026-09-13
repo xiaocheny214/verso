@@ -55,7 +55,7 @@ class HttpxOAuthClient:
         return f"{AUTHORIZE_URL}?{query}"
 
     def exchange_code(self, code: str) -> ZhihuToken:
-        with httpx.Client(timeout=self._timeout) as client:
+        with self._client() as client:
             response = client.post(
                 TOKEN_URL,
                 data={
@@ -66,13 +66,14 @@ class HttpxOAuthClient:
                     "code": code,
                 },
             )
-        payload = response.json() if response.content else {}
-        token = payload.get("access_token")
+        payload = _json_dict(response)
+        blob = _oauth_blob(payload)
+        token = blob.get("access_token") or blob.get("AccessToken")
         if not token:
             raise RuntimeError("zhihu token exchange failed")
         return ZhihuToken(
             access_token=str(token),
-            expires_in=int(payload.get("expires_in") or 3600),
+            expires_in=int(blob.get("expires_in") or blob.get("ExpiresIn") or 3600),
         )
 
     def fetch_profile(self, access_token: str) -> ZhihuProfile:
@@ -82,10 +83,9 @@ class HttpxOAuthClient:
             "X-Request-Timestamp": str(_unix_now()),
             "Content-Type": "application/json",
         }
-        with httpx.Client(timeout=self._timeout) as client:
+        with self._client() as client:
             response = client.get(PROFILE_URL, headers=headers)
-        payload = response.json() if response.content else {}
-        data = payload.get("Data") if isinstance(payload.get("Data"), dict) else payload
+        data = _oauth_blob(_json_dict(response))
         url_token = _first_str(data, "UrlToken", "url_token")
         name = _first_str(data, "Fullname", "Name", "name") or url_token
         if not url_token:
@@ -95,14 +95,36 @@ class HttpxOAuthClient:
             name=name,
             avatar_url=_first_str(data, "AvatarUrl", "avatar_url"),
             headline=_first_str(data, "Headline", "headline"),
-            open_id=_first_str(data, "OpenId", "open_id", "id"),
+            open_id=_first_str(data, "OpenId", "open_id"),
         )
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(timeout=self._timeout)
 
 
 def _unix_now() -> int:
     from time import time
 
     return int(time())
+
+
+def _json_dict(response: httpx.Response) -> dict:
+    if not response.content:
+        return {}
+    try:
+        payload = response.json()
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _oauth_blob(payload: dict) -> dict:
+    """顶层或 Data/data 里都可能有业务字段；code:20000 表示成功。"""
+    for key in ("Data", "data"):
+        inner = payload.get(key)
+        if isinstance(inner, dict):
+            return {**payload, **inner}
+    return payload
 
 
 def _first_str(data: object, *keys: str) -> str | None:

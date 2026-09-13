@@ -26,6 +26,7 @@ class AppSettings(BaseSettings):
     public_origin: str = "http://localhost:3000"
     create_tables: bool = False
     llm_api_key: str = ""
+    llm_base_url: str = ""
     llm_model: str = ""
 
 
