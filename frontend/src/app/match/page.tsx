@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { AppFrame } from "@/components/app-frame";
 import { MatchExplanation } from "@/components/match-explanation";
@@ -16,6 +16,19 @@ const stateLabels: Array<{ value: MatchDemoState; label: string }> = [
   { value: "cancelled", label: "已取消" },
   { value: "error", label: "异常" },
 ];
+
+function isMatchDemoState(value: string | null): value is MatchDemoState {
+  return stateLabels.some((state) => state.value === value);
+}
+
+function subscribeToStaticRoute() {
+  return () => undefined;
+}
+
+function getMatchRouteState(): MatchDemoState {
+  const requested = new URLSearchParams(window.location.search).get("state");
+  return isMatchDemoState(requested) ? requested : "compose";
+}
 
 const stateCopy: Record<
   MatchDemoState,
@@ -69,7 +82,13 @@ const panelCopy = {
 } as const;
 
 export default function MatchPage() {
-  const [view, setView] = useState<MatchDemoState>("compose");
+  const routeView = useSyncExternalStore<MatchDemoState>(
+    subscribeToStaticRoute,
+    getMatchRouteState,
+    () => "compose",
+  );
+  const [selectedView, setView] = useState<MatchDemoState | null>(null);
+  const view = selectedView ?? routeView;
   const [wantText, setWantText] = useState(demoMatch.want_text);
   const copy = stateCopy[view];
   const panel =

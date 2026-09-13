@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useState, useSyncExternalStore } from "react";
 
 import { AppFrame } from "@/components/app-frame";
 import type { ExchangeMessage } from "@/lib/contracts";
@@ -16,6 +16,19 @@ const exchangeStates: Array<{ value: ExchangeDemoState; label: string }> = [
   { value: "error", label: "异常" },
 ];
 
+function isExchangeDemoState(value: string | null): value is ExchangeDemoState {
+  return exchangeStates.some((state) => state.value === value);
+}
+
+function subscribeToStaticRoute() {
+  return () => undefined;
+}
+
+function getExchangeRouteState(): ExchangeDemoState {
+  const requested = new URLSearchParams(window.location.search).get("state");
+  return isExchangeDemoState(requested) ? requested : "open";
+}
+
 const exchangeTitles: Record<ExchangeDemoState, string> = {
   open: "这不是闲聊，每个人带走一个答案。",
   empty: "这不是闲聊，每个人带走一个答案。",
@@ -26,7 +39,13 @@ const exchangeTitles: Record<ExchangeDemoState, string> = {
 export default function ExchangePage() {
   const [messages, setMessages] = useState(demoMessages);
   const [draft, setDraft] = useState("");
-  const [view, setView] = useState<ExchangeDemoState>("open");
+  const routeView = useSyncExternalStore<ExchangeDemoState>(
+    subscribeToStaticRoute,
+    getExchangeRouteState,
+    () => "open",
+  );
+  const [selectedView, setView] = useState<ExchangeDemoState | null>(null);
+  const view = selectedView ?? routeView;
   const peer = demoMatch.peer!;
   const visibleMessages = view === "empty" ? [] : messages;
 
