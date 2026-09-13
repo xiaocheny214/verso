@@ -1,19 +1,19 @@
 # Verso (背叶)
 
-Light social matching on Zhihu-quality articles: start a short match on one piece of writing.
+Mutual-complement matching powered by each person's Zhihu knowledge footprint.
 
-立足于知乎垂直优质内容的轻社交匹配：在一篇文章上开短对局。
+由知乎授权内容形成擅长画像，把「你会什么」与「你这次想学什么」双向配对的轻社交产品。
 
 - English name: **Verso**
 - Chinese name: **背叶**
 - Repository: [xiaocheny214/verso](https://github.com/xiaocheny214/verso)
 - License: proprietary commercial (see [LICENSE](LICENSE))
 
-Verso is the other side of a page. Two matching strategies stay in spec until the market says otherwise: **same map** (invite someone also reading this article) and **complement** (pair people who complete each other). This MVP only ships same-map invite. Complement is narrative and role display, not a second matching engine.
+Verso is the other side of a page. A match succeeds only when both sides complete each other: A can teach what B wants to learn, and B can teach what A wants to learn.
 
-Casual browsing invites from an article. Both sides must accept before a room is created. The article is the map. Rooms expire. Match history stays. A conversation summary is optional to keep. Matching other askers, routing a stated question to answerers, or auto-pairing opposite domains is incoming.
+The MVP flow is **Zhihu OAuth → strengths portrait → one-time learning ticket → mutual match → asynchronous exchange → human-triggered quality review**. Articles, follows, and favorites provide portrait evidence; they are not chat maps. Same-article presence, live invites, timed rooms, feed, and map are out of scope.
 
-Status: product spec is [`docs/product-proposal.md`](docs/product-proposal.md). Backend layout spec is [`docs/architecture.md`](docs/architecture.md) ([#5](https://github.com/xiaocheny214/verso/issues/5)). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Status: product spec is [`docs/product-proposal.md`](docs/product-proposal.md) ([#30](https://github.com/xiaocheny214/verso/issues/30)). Backend boundaries are [`docs/architecture.md`](docs/architecture.md) ([#31](https://github.com/xiaocheny214/verso/issues/31)). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ```text
 backend/     # uv workspace: common → framework → app

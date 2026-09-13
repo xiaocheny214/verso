@@ -4,7 +4,7 @@
 
 项目按 `Proposal → Issue → 分支 → PR → Review → 合并` 推进：所有改动从 Issue 出发，代码经 PR 合入 `main`。第一次参与，按本文档顺序读下来即可跑通全流程。
 
-产品规格以 [#1 产品策划案](https://github.com/xiaocheny214/verso/issues/1) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。后端包分层以 [`docs/architecture.md`](docs/architecture.md) 与 [#5](https://github.com/xiaocheny214/verso/issues/5) 为准（提案只写文档，代码骨架另开 feat Issue）。本期只打磨最小 MVP 主路径（文章下邀请 → 双方同意进房 → 限时房间 → 战绩 / 可选纪要）。提案里标成 incoming / 不做的能力，不要用 PR 夹带进来。
+产品规格以 [#30 产品策划案](https://github.com/xiaocheny214/verso/issues/30) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。后端包分层与领域边界以 [`docs/architecture.md`](docs/architecture.md) 与 [#31](https://github.com/xiaocheny214/verso/issues/31) 为准（提案只写文档，代码另开 feat Issue）。本期只打磨最小 MVP 主路径（认证 → 画像 → 双向互补匹配 → 异步交流 → 质量评估）。同文章在场、实时邀请、限时房间、Feed 与 Map 已退出范围，不要用 PR 夹带进来。
 
 ## 许可
 
@@ -47,7 +47,7 @@ git rebase origin/main
 git checkout -b <类型>/#<issue号>-<短英文名>
 ```
 
-分支名示例：`feat/#2-invite-handshake`、`fix/#3-room-timeout`、`docs/#1-contributing`、`ci/#2-naming-conventions`。
+分支名示例：`feat/#34-identity-oauth`、`feat/#36-mutual-match`、`docs/#30-canonical-proposal`、`ci/#2-naming-conventions`。
 
 指向 `main` 的 PR 会检查分支名。`main` 本身不走这条规则。
 
@@ -62,7 +62,7 @@ type(scope): subject
 ```
 
 - `type` 常用：`feat`、`fix`、`docs`、`ci`、`chore`、`refactor`、`test`、`style`、`perf`、`revert`。
-- `scope` 可选，小写英文，如 `contributing`、`auth`、`room`。
+- `scope` 可选，小写英文，如 `contributing`、`identity`、`match`、`exchange`。
 - `subject` 用现在时、不以句号结尾；中英文均可。
 - 解决某个 Issue 时，在 subject 末尾或正文写 `#12` / `Closes #12`。
 - 第一行建议不超过 120 个字符。
@@ -88,9 +88,9 @@ ci: enforce commit and branch naming (#2)
 ## 提 Issue
 
 - 每个 Issue 写清背景、目标和验收标准，禁止空泛标题。
-- 先确认 [#1](https://github.com/xiaocheny214/verso/issues/1) 的本期范围：incoming 与明确不做的能力，不要再开功能 Issue。
+- 先确认 [#30](https://github.com/xiaocheny214/verso/issues/30) 的本期范围和 [#31](https://github.com/xiaocheny214/verso/issues/31) 的模块边界：明确不做的能力不要再开功能 Issue。
 - 标签按工作类型挂，不要把实现 Issue 标成 `proposal`：
-  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#1](https://github.com/xiaocheny214/verso/issues/1)）
+  - `proposal` / `FullSpec`：产品提案与完整规格（如 [#30](https://github.com/xiaocheny214/verso/issues/30)）
   - `feat`：产品功能
   - `bug`：缺陷
   - `ci`：门禁、工作流、提交 / 分支规范
@@ -112,7 +112,7 @@ ci: enforce commit and branch naming (#2)
 
 工程尚未冻结 OpenAPI。接口代码出现后，前后端以仓库内唯一契约文件为准（由 `verso_app.web` 生成，禁止长期手写两套）。
 
-后端是 uv workspace：`verso-common` → `verso-framework` → `verso-app`。领域逻辑只放 `server`。局内提示词与管线放 `server.llm_pipeline`；`server` 内模块同层可互相调用。`web` / `worker` 只调 `server`，不直连 LLM 提供方。分层由 import-linter 约束包边界，不要为了图快让 web 去调 framework。
+后端是 uv workspace：`verso-common` → `verso-framework` → `verso-app`。领域逻辑只放 `server`。`identity / match / exchange / quality / reputation` 各自持有自己的状态；`server` 内模块通过明确服务接口协作。`web` / `worker` 只调 `server`，不直连 LLM 提供方。分层由 import-linter 约束包边界，不要为了图快让 web 去调 framework。
 
 - 变更路由、参数、模型或描述时，在同一 PR 里更新契约并提交。
 - 契约与实现不一致时，以「先改契约 Issue、再改代码」为序，不要在前端猜字段。
