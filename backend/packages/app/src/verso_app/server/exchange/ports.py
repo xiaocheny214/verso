@@ -1,4 +1,4 @@
-"""exchange 开对端口。match 配上后调用；消息表不在本 feat。"""
+"""exchange 开对端口。match 配上后调用。"""
 
 from __future__ import annotations
 
