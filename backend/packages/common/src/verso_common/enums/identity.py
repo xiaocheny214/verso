@@ -32,3 +32,9 @@ class PortraitHorizon(StrEnum):
 
     STABLE = "stable"
     RECENT_7D = "recent_7d"
+
+
+class UserStatus(StrEnum):
+    ACTIVE = "active"
+    BANNED = "banned"
+    DELETED = "deleted"

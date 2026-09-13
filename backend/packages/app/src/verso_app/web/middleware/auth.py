@@ -1,0 +1,37 @@
+"""当前登录用户。"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import Depends, Request
+from sqlalchemy.orm import Session
+
+from verso_app.server.identity.models import User
+from verso_app.server.identity.service import IdentityService
+from verso_app.server.identity.session_store import SessionStore
+from verso_app.server.reputation.service import ReputationService
+from verso_framework.config import get_app_settings
+from verso_framework.db import get_redis, get_session
+from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClient
+
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+def get_identity_service(session: SessionDep) -> IdentityService:
+    settings = get_app_settings()
+    return IdentityService(
+        session=session,
+        store=SessionStore(get_redis()),
+        oauth=HttpxOAuthClient(settings),
+        zhihu=HttpxUserDataClient(settings),
+        reputation=ReputationService(),
+        settings=settings,
+    )
+
+
+IdentityDep = Annotated[IdentityService, Depends(get_identity_service)]
+
+
+def get_current_user(request: Request, identity: IdentityDep) -> User:
+    return identity.require_user(request.cookies.get(get_app_settings().session_cookie))
