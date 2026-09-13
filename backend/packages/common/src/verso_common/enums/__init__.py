@@ -1,32 +1,23 @@
-from enum import StrEnum
+"""共享枚举。"""
 
+from verso_common.enums.biz_code import BizCode
+from verso_common.enums.exchange import ExchangeStatus
+from verso_common.enums.identity import PortraitHorizon, PortraitSource, StrengthTag
+from verso_common.enums.match import TicketStatus
+from verso_common.enums.model import ModelErrorType
+from verso_common.enums.quality import ReviewVerdict
+from verso_common.enums.realtime import RealtimeChannel
+from verso_common.enums.reputation import Eligibility
 
-class ArticleSource(StrEnum):
-    ZHIHU_CONTENT = "zhihu_content"
-    ZHIHU_SEARCH = "zhihu_search"
-
-
-class InviteStatus(StrEnum):
-    PENDING = "pending"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    EXPIRED = "expired"
-    CANCELLED = "cancelled"
-    FAILED = "failed"
-
-
-class RoomStatus(StrEnum):
-    LIVE = "live"
-    CLOSED = "closed"
-
-
-class MatchRole(StrEnum):
-    READER = "reader"
-    AUTHOR = "author"
-    CO_READER = "co_reader"
-
-
-class RealtimeChannel(StrEnum):
-    ARTICLE = "article"
-    USER = "user"
-    ROOM = "room"
+__all__ = [
+    "BizCode",
+    "Eligibility",
+    "ExchangeStatus",
+    "ModelErrorType",
+    "PortraitHorizon",
+    "PortraitSource",
+    "RealtimeChannel",
+    "ReviewVerdict",
+    "StrengthTag",
+    "TicketStatus",
+]

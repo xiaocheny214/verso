@@ -1,12 +1,5 @@
-from pydantic import BaseModel
+"""统一返回：成功 / 失败响应体。"""
 
+from verso_common.result.response import ListResponse, Response
 
-class Ok[T](BaseModel):
-    ok: bool = True
-    data: T
-
-
-class Err(BaseModel):
-    ok: bool = False
-    code: str
-    message: str
+__all__ = ["ListResponse", "Response"]

@@ -1,38 +1,84 @@
-from pydantic import BaseModel
+"""身份、匹配、交换、评审、声望的对外视图。不含 ORM。"""
 
-from verso_common.enums import ArticleSource, InviteStatus, MatchRole
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+from verso_common.constants import REPUTATION_INITIAL_SCORE
+from verso_common.enums import (
+    Eligibility,
+    ExchangeStatus,
+    PortraitHorizon,
+    PortraitSource,
+    ReviewVerdict,
+    StrengthTag,
+    TicketStatus,
+)
 
 
-class UserPreferences(BaseModel):
-    summary_generate: bool = True
-    summary_auto_save: bool = False
+class Strength(BaseModel):
+    tag: StrengthTag
+    source: PortraitSource
+    evidence_title: str | None = None
+    evidence_url: str | None = None
 
 
-class ArticleCard(BaseModel):
+class PortraitView(BaseModel):
+    horizon: PortraitHorizon
+    strengths: list[Strength] = Field(default_factory=list)
+
+
+class UserCard(BaseModel):
     id: str
-    title: str
-    excerpt: str
-    url: str
-    source: ArticleSource
-    author_invitable: bool
-    presence_count: int = 0
-    cold_start: bool = False
+    name: str
+    avatar_url: str | None = None
+    portraits: list[PortraitView] = Field(default_factory=list)
 
 
-class InviteView(BaseModel):
+class TicketView(BaseModel):
     id: str
-    article_id: str
-    from_user_id: str
-    to_user_id: str
-    status: InviteStatus
-    room_id: str | None = None
+    want_text: str
+    want_tag: StrengthTag | None = None
+    status: TicketStatus
 
 
-class MatchCard(BaseModel):
+class PairView(BaseModel):
+    """配上之后给会话列表看的对方名片。"""
+
+    exchange_id: str
+    peer_id: str
+    peer_name: str
+    peer_avatar_url: str | None = None
+    peer_strengths: list[StrengthTag] = Field(default_factory=list)
+    peer_want_text: str
+
+
+class ExchangeView(BaseModel):
     id: str
-    article_title: str
-    article_url: str
-    opponent_name: str
-    role: MatchRole
-    duration_sec: int
-    summary_text: str | None = None
+    user_a_id: str
+    user_b_id: str
+    status: ExchangeStatus
+    opened_at: datetime
+    closed_at: datetime | None = None
+
+
+class MessageView(BaseModel):
+    id: str
+    exchange_id: str
+    sender_id: str
+    text: str
+    created_at: datetime
+
+
+class ReviewView(BaseModel):
+    id: str
+    exchange_id: str
+    reviewer_id: str
+    reviewee_id: str
+    verdict: ReviewVerdict
+
+
+class ReputationView(BaseModel):
+    score: int = REPUTATION_INITIAL_SCORE
+    eligibility: Eligibility = Eligibility.ACTIVE
+    suspended_until: datetime | None = None
