@@ -46,17 +46,19 @@ class QualityService:
             raise BizException("已经评估过对方", code=BizCode.CONFLICT)
         want_text = self._want_text(user.id, exchange_id)
         answer = self._answer_text(user, exchange_id, reviewee_id)
-        verdict = self._judge.judge(want_text=want_text, answer=answer)
+        judgement = self._judge.judge(want_text=want_text, answer=answer)
         review = Review(
             exchange_id=exchange_id,
             reviewer_id=user.id,
             reviewee_id=reviewee_id,
-            verdict=verdict.value,
+            verdict=judgement.verdict.value,
+            score=judgement.score,
+            reason=judgement.reason,
             want_text=want_text,
             answer_text=answer,
         )
         self._session.add(review)
-        if verdict == ReviewVerdict.POOR:
+        if judgement.verdict == ReviewVerdict.POOR:
             self._reputation.apply_poor(self._session, reviewee_id)
         self._session.flush()
         return self._to_view(review)
@@ -99,4 +101,6 @@ class QualityService:
             reviewer_id=str(row.reviewer_id),
             reviewee_id=str(row.reviewee_id),
             verdict=ReviewVerdict(row.verdict),
+            score=row.score,
+            reason=row.reason,
         )

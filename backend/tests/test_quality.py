@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Self
 from uuid import UUID
 
 import pytest
@@ -10,8 +11,13 @@ from sqlalchemy.pool import StaticPool
 from verso_app.server.exchange.service import ExchangeService
 from verso_app.server.identity.models import Portrait, User
 from verso_app.server.match.service import MatchService
-from verso_app.server.quality.judge import LlmAnswerJudge, parse_verdict
+from verso_app.server.quality.judge import (
+    AnswerScore,
+    LlmAnswerJudge,
+    verdict_from_score,
+)
 from verso_app.server.quality.models import Review
+from verso_app.server.quality.ports import Judgement
 from verso_app.server.quality.service import QualityService
 from verso_app.server.reputation.models import Reputation
 from verso_app.server.reputation.service import ReputationService
@@ -33,11 +39,24 @@ from verso_framework.db.base import Base
 
 
 class FixedJudge:
-    def __init__(self, verdict: ReviewVerdict) -> None:
-        self.verdict = verdict
+    def __init__(self, verdict: ReviewVerdict, *, score: int | None = None) -> None:
+        self._judgement = Judgement(verdict=verdict, score=score)
 
-    def judge(self, *, want_text: str, answer: str) -> ReviewVerdict:
-        return self.verdict
+    def judge(self, *, want_text: str, answer: str) -> Judgement:
+        return self._judgement
+
+
+class FakeChat:
+    def __init__(self, result: object) -> None:
+        self._result = result
+
+    def with_structured_output(self, _schema: object) -> Self:
+        return self
+
+    def invoke(self, _messages: object) -> object:
+        if isinstance(self._result, Exception):
+            raise self._result
+        return self._result
 
 
 @pytest.fixture
@@ -183,28 +202,63 @@ def test_peers_can_review_each_other(db: Session) -> None:
     assert len(db.scalars(select(Review)).all()) == 2
 
 
-def test_model_failure_records_unclear(db: Session) -> None:
+def test_structured_score_poor_deducts(db: Session) -> None:
     alice, bob, pair_id = _pair(db)
-    ExchangeService(db).send(bob, pair_id, text="先练徒手蹲")
-
-    def boom(_prompt: str) -> str:
-        raise RuntimeError("down")
-
+    ExchangeService(db).send(bob, pair_id, text="嗯")
     view = QualityService(
         db,
         exchange=ExchangeService(db),
         reputation=ReputationService(),
-        judge=LlmAnswerJudge(boom),
+        judge=LlmAnswerJudge(FakeChat(AnswerScore(score=45, reason="只有嗯，没有对准问题"))),
     ).submit(alice, pair_id)
-    assert view.verdict == ReviewVerdict.UNCLEAR
+    assert view.verdict == ReviewVerdict.POOR
+    assert view.score == 45
+    assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE - REPUTATION_POOR_DELTA
+
+
+@pytest.mark.parametrize(
+    ("score", "verdict"),
+    [
+        (60, ReviewVerdict.UNCLEAR),
+        (80, ReviewVerdict.UNCLEAR),
+        (81, ReviewVerdict.GOOD),
+    ],
+)
+def test_structured_mid_and_good_do_not_deduct(
+    db: Session, score: int, verdict: ReviewVerdict
+) -> None:
+    alice, bob, pair_id = _pair(db)
+    ExchangeService(db).send(bob, pair_id, text="可以先看基础动作")
+    view = QualityService(
+        db,
+        exchange=ExchangeService(db),
+        reputation=ReputationService(),
+        judge=LlmAnswerJudge(FakeChat(AnswerScore(score=score, reason="夹具"))),
+    ).submit(alice, pair_id)
+    assert view.verdict == verdict
+    assert view.score == score
     assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE
 
 
-def test_parse_verdict() -> None:
-    assert parse_verdict("poor") == ReviewVerdict.POOR
-    assert parse_verdict("GOOD\nthanks") == ReviewVerdict.GOOD
-    assert parse_verdict("maybe") == ReviewVerdict.UNCLEAR
-    assert parse_verdict("verdict: unclear") == ReviewVerdict.UNCLEAR
+def test_model_failure_records_unclear(db: Session) -> None:
+    alice, bob, pair_id = _pair(db)
+    ExchangeService(db).send(bob, pair_id, text="先练徒手蹲")
+    view = QualityService(
+        db,
+        exchange=ExchangeService(db),
+        reputation=ReputationService(),
+        judge=LlmAnswerJudge(FakeChat(RuntimeError("down"))),
+    ).submit(alice, pair_id)
+    assert view.verdict == ReviewVerdict.UNCLEAR
+    assert view.score is None
+    assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE
+
+
+def test_verdict_from_score() -> None:
+    assert verdict_from_score(59) == ReviewVerdict.POOR
+    assert verdict_from_score(60) == ReviewVerdict.UNCLEAR
+    assert verdict_from_score(80) == ReviewVerdict.UNCLEAR
+    assert verdict_from_score(81) == ReviewVerdict.GOOD
 
 
 def test_create_review_via_http(db: Session) -> None:
