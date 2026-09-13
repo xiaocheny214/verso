@@ -25,7 +25,14 @@ HTTP 统一返回 `{code, message, data}`，HTTP 状态码恒 200，业务对错
 - `POST /me/portrait/sync`
 - `POST /me/portrait/self-report`（创作和收藏都抽不出擅长时才允许）
 
-本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用起来时会建 `users` / `portraits` / `reputations`。
+匹配（[#31](https://github.com/xiaocheny214/verso/issues/31)）：
+
+- `POST /match/conditions` 提交这次想学的（`want_text` + `want_tag`），立刻尝试互补配对
+- `GET /match/conditions/me` 当前未关闭条件；配上后带对方名片（擅长现读画像，不落匹配表）
+- `POST /match/conditions/cancel` 仅取消 `waiting`
+- 条件表没有 `strengths`；`covers` 用 `stable ∪ recent_7d`
+
+本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用起来时会建 `users` / `portraits` / `reputations` / `match_conditions`。
 
 入口：
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from verso_app.server.identity.models import User
 from verso_app.server.identity.service import IdentityService
 from verso_app.server.identity.session_store import SessionStore
+from verso_app.server.match.service import MatchService
 from verso_app.server.reputation.service import ReputationService
 from verso_framework.config import get_app_settings
 from verso_framework.db import get_redis, get_session
@@ -31,6 +32,10 @@ def get_identity_service(session: SessionDep) -> IdentityService:
 
 
 IdentityDep = Annotated[IdentityService, Depends(get_identity_service)]
+
+
+def get_match_service(session: SessionDep) -> MatchService:
+    return MatchService(session=session)
 
 
 def get_current_user(request: Request, identity: IdentityDep) -> User:

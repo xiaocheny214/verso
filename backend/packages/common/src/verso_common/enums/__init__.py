@@ -8,7 +8,7 @@ from verso_common.enums.identity import (
     StrengthTag,
     UserStatus,
 )
-from verso_common.enums.match import TicketStatus
+from verso_common.enums.match import MatchConditionStatus
 from verso_common.enums.model import ModelErrorType
 from verso_common.enums.quality import ReviewVerdict
 from verso_common.enums.realtime import RealtimeChannel
@@ -24,6 +24,6 @@ __all__ = [
     "RealtimeChannel",
     "ReviewVerdict",
     "StrengthTag",
-    "TicketStatus",
+    "MatchConditionStatus",
     "UserStatus",
 ]

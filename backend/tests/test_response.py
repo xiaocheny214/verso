@@ -6,8 +6,8 @@ from verso_common.enums import (
     ExchangeStatus,
     PortraitHorizon,
     ReviewVerdict,
+    MatchConditionStatus,
     StrengthTag,
-    TicketStatus,
 )
 from verso_common.result import ListResponse, Response
 
@@ -15,7 +15,7 @@ from verso_common.result import ListResponse, Response
 def test_domain_enums_match_spec() -> None:
     assert StrengthTag.PROGRAMMING == "编程"
     assert StrengthTag.FITNESS == "健身"
-    assert TicketStatus.OPEN == "open"
+    assert MatchConditionStatus.WAITING == "waiting"
     assert ExchangeStatus.CLOSED == "closed"
     assert ReviewVerdict.POOR == "poor"
     assert Eligibility.SUSPENDED == "suspended"
