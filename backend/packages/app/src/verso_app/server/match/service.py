@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from verso_app.server.auth.models import User
 from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
+from verso_app.server.match.compatibility import (
+    MAX_COMPATIBILITY_CANDIDATES,
+    CapabilityEvidence,
+    DirectionInput,
+    PairCompatibilityEvaluator,
+    TagOnlyCompatibilityEvaluator,
+)
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.reputation.service import ReputationService
@@ -26,10 +34,12 @@ class MatchService:
         *,
         exchange: ExchangeOpener | None = None,
         reputation: ReputationService | None = None,
+        compatibility: PairCompatibilityEvaluator | None = None,
     ) -> None:
         self._session = session
         self._exchange = exchange or NoopExchangeOpener()
         self._reputation = reputation or ReputationService()
+        self._compatibility = compatibility or TagOnlyCompatibilityEvaluator()
 
     def submit(self, user: User, *, want_text: str, want_tag: StrengthTag) -> MatchConditionView:
         text = want_text.strip()
@@ -120,12 +130,37 @@ class MatchService:
                 other.created_at,
             )
         )
-        for other in compatible:
+        for other in compatible[:MAX_COMPATIBILITY_CANDIDATES]:
+            if not self._supports_specific_pair(mine, other):
+                continue
             locked = self._lock_waiting(other.id, now)
             if locked is None:
                 continue
             if self._claim_pair(mine, locked, now):
                 return
+
+    def _supports_specific_pair(
+        self,
+        mine: MatchCondition,
+        other: MatchCondition,
+    ) -> bool:
+        mine_wants = StrengthTag(mine.want_tag)
+        other_wants = StrengthTag(other.want_tag)
+        directions = (
+            DirectionInput(
+                id=f"{other.user_id}:{mine.id}",
+                question=mine.want_text,
+                requested_tag=mine_wants,
+                candidate_evidence=self._capability_evidence(other.user_id, mine_wants),
+            ),
+            DirectionInput(
+                id=f"{mine.user_id}:{other.id}",
+                question=other.want_text,
+                requested_tag=other_wants,
+                candidate_evidence=self._capability_evidence(mine.user_id, other_wants),
+            ),
+        )
+        return self._compatibility.allows(directions)
 
     def _lock_waiting(self, condition_id: uuid.UUID, now: datetime) -> MatchCondition | None:
         stmt = select(MatchCondition).where(
@@ -214,6 +249,40 @@ class MatchService:
                 tags.add(str(raw))
         return tags
 
+    def _capability_evidence(
+        self,
+        user_id: uuid.UUID,
+        tag: StrengthTag,
+    ) -> tuple[CapabilityEvidence, ...]:
+        rows = self._session.scalars(select(Portrait).where(Portrait.user_id == user_id)).all()
+        evidence_by_id: dict[str, CapabilityEvidence] = {}
+        for row in rows:
+            for raw in row.evidence or []:
+                if not isinstance(raw, dict) or raw.get("tag") != tag.value:
+                    continue
+                title = str(raw.get("title") or "").strip()
+                url = str(raw.get("url") or "").strip()
+                if not title:
+                    continue
+                evidence_id = _capability_evidence_id(tag, title, url)
+                try:
+                    confidence = int(raw.get("confidence") or 0)
+                except (TypeError, ValueError):
+                    confidence = 0
+                evidence_by_id[evidence_id] = CapabilityEvidence(
+                    id=evidence_id,
+                    title=title,
+                    url=url,
+                    reason=str(raw.get("reason") or ""),
+                    confidence=max(0, min(confidence, 100)),
+                )
+        return tuple(
+            sorted(
+                evidence_by_id.values(),
+                key=lambda item: (-item.confidence, item.id),
+            )
+        )
+
     def _to_view(self, row: MatchCondition) -> MatchConditionView:
         return MatchConditionView(
             id=str(row.id),
@@ -255,3 +324,8 @@ class MatchService:
             strengths=strengths,
             score=self._reputation.score_of(self._session, peer.id),
         )
+
+
+def _capability_evidence_id(tag: StrengthTag, title: str, url: str) -> str:
+    digest = sha256(f"{tag.value}\0{url}\0{title}".encode()).hexdigest()[:16]
+    return f"portrait:{digest}"
