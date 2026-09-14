@@ -12,6 +12,7 @@ from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.exchange.service import ExchangeService
 from verso_app.server.match.service import MatchService
+from verso_app.server.portrait.extractor import build_evidence_classifier
 from verso_app.server.portrait.service import PortraitService
 from verso_app.server.quality.judge import build_judge
 from verso_app.server.quality.service import QualityService
@@ -39,10 +40,12 @@ def get_auth_service(session: SessionDep) -> AuthService:
 
 
 def get_portrait_service(session: SessionDep) -> PortraitService:
+    settings = get_app_settings()
     return PortraitService(
         session=session,
         grants=SessionStore(get_redis()),
-        zhihu=HttpxUserDataClient(get_app_settings()),
+        zhihu=HttpxUserDataClient(settings),
+        classifier=build_evidence_classifier(settings),
     )
 
 

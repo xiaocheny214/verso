@@ -6,14 +6,21 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from verso_app.server.auth.models import User
+from verso_app.server.portrait.extractor import (
+    EvidenceClassifier,
+    EvidenceInput,
+    EvidenceKind,
+    RuleEvidenceClassifier,
+    aggregate_portrait,
+)
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.portrait.ports import GrantReader
-from verso_app.server.portrait.tagger import tags_from_text
 from verso_common.constants import PORTRAIT_RECENT_DAYS
 from verso_common.enums import BizCode, PortraitHorizon, PortraitSource, StrengthTag
 from verso_common.exceptions import BizException
@@ -34,10 +41,12 @@ class PortraitService:
         session: Session,
         grants: GrantReader,
         zhihu: UserDataClient,
+        classifier: EvidenceClassifier | None = None,
     ) -> None:
         self._session = session
         self._grants = grants
         self._zhihu = zhihu
+        self._classifier = classifier or RuleEvidenceClassifier()
 
     def card_for(self, user: User) -> UserCard:
         portraits = self._session.scalars(select(Portrait).where(Portrait.user_id == user.id)).all()
@@ -64,21 +73,19 @@ class PortraitService:
             raise BizException("画像同步失败，请稍后重试", code=BizCode.INTERNAL_ERROR)
         now = datetime.now(UTC)
         recent_start = now - timedelta(days=PORTRAIT_RECENT_DAYS)
-        stable_tags, stable_evidence, stable_source = _from_all(
-            contents.items, followees.items, favorites.items
-        )
-        recent_tags, recent_evidence, recent_source = _from_recent(
-            contents.items, favorites.items, recent_start
-        )
-        if not all_ok and not stable_tags and not recent_tags:
+        evidence = _build_evidence(contents.items, followees.items, favorites.items)
+        assessments = self._classifier.classify(evidence)
+        stable = aggregate_portrait(evidence, assessments)
+        recent = aggregate_portrait(evidence, assessments, since=recent_start)
+        if not all_ok and not stable.tags and not recent.tags:
             logger.warning("知乎部分接口失败且抽不出擅长，保留已有画像 user_id=%s", user_id)
             return
         self._upsert_portrait(
             user_id,
             PortraitHorizon.STABLE,
-            stable_tags,
-            stable_evidence,
-            source=stable_source,
+            stable.tags,
+            stable.evidence,
+            source=stable.source,
             window_start=None,
             window_end=None,
             synced_at=now,
@@ -86,9 +93,9 @@ class PortraitService:
         self._upsert_portrait(
             user_id,
             PortraitHorizon.RECENT_7D,
-            recent_tags,
-            recent_evidence,
-            source=recent_source,
+            recent.tags,
+            recent.evidence,
+            source=recent.source,
             window_start=recent_start,
             window_end=now,
             synced_at=now,
@@ -168,7 +175,28 @@ def _to_view(row: Portrait) -> PortraitView:
             tag = StrengthTag(raw)
         except ValueError:
             continue
-        strengths.append(Strength(tag=tag, source=source))
+        evidence = next(
+            (
+                item
+                for item in row.evidence or []
+                if isinstance(item, dict) and item.get("tag") == tag.value
+            ),
+            None,
+        )
+        evidence_source = source
+        if evidence and evidence.get("source"):
+            try:
+                evidence_source = PortraitSource(str(evidence["source"]))
+            except ValueError:
+                evidence_source = source
+        strengths.append(
+            Strength(
+                tag=tag,
+                source=evidence_source,
+                evidence_title=str(evidence.get("title") or "") or None if evidence else None,
+                evidence_url=str(evidence.get("url") or "") or None if evidence else None,
+            )
+        )
     return PortraitView(horizon=PortraitHorizon(row.kind), strengths=strengths)
 
 
@@ -189,87 +217,51 @@ def _try_list(label: str, fn) -> _Fetch:
         return _Fetch(items=[], ok=False)
 
 
-def _portrait_source(*, from_contents: bool, from_favorites: bool) -> PortraitSource:
-    if from_contents:
-        return PortraitSource.CONTENTS
-    if from_favorites:
-        return PortraitSource.FAVORITES
-    return PortraitSource.CONTENTS
-
-
-def _from_all(
+def _build_evidence(
     contents: list[ZhihuContent],
     followees: list[ZhihuFollowee],
     favorites: list[ZhihuCollection],
-) -> tuple[list[StrengthTag], list[dict], PortraitSource]:
-    tags: list[StrengthTag] = []
-    evidence: list[dict] = []
-    from_contents = False
-    from_favorites = False
+) -> list[EvidenceInput]:
+    evidence: list[EvidenceInput] = []
     for item in contents:
-        hit = tags_from_text(item.title, item.summary)
-        if hit:
-            from_contents = True
-            _extend_unique(tags, hit)
-            _push_evidence(evidence, item.title, item.url, item.content_type)
+        evidence.append(
+            EvidenceInput(
+                id=_evidence_id(EvidenceKind.CONTENT, item.url, item.title),
+                kind=EvidenceKind.CONTENT,
+                content_type=item.content_type,
+                title=item.title,
+                text=item.summary,
+                url=item.url,
+                observed_at=datetime.fromtimestamp(item.created_at, tz=UTC),
+            )
+        )
     for item in favorites:
-        hit = tags_from_text(item.title, item.summary, item.extra_text)
-        if hit:
-            from_favorites = True
-            _extend_unique(tags, hit)
-            _push_evidence(evidence, item.title, item.url, "collection")
+        evidence.append(
+            EvidenceInput(
+                id=_evidence_id(EvidenceKind.FAVORITE, item.url, item.title),
+                kind=EvidenceKind.FAVORITE,
+                content_type="collection",
+                title=item.title,
+                text=" ".join(part for part in (item.summary, item.extra_text) if part),
+                url=item.url,
+                observed_at=datetime.fromtimestamp(item.fav_time, tz=UTC),
+            )
+        )
     for item in followees:
-        hit = tags_from_text(item.fullname, item.headline)
-        if hit:
-            from_contents = True
-            _extend_unique(tags, hit)
-    return (
-        tags,
-        evidence[:5],
-        _portrait_source(from_contents=from_contents, from_favorites=from_favorites),
-    )
+        evidence.append(
+            EvidenceInput(
+                id=_evidence_id(EvidenceKind.FOLLOWEE, item.url, item.fullname),
+                kind=EvidenceKind.FOLLOWEE,
+                content_type="followee",
+                title=item.headline,
+                text="",
+                url=item.url,
+                observed_at=None,
+            )
+        )
+    return evidence
 
 
-def _from_recent(
-    contents: list[ZhihuContent],
-    favorites: list[ZhihuCollection],
-    recent_start: datetime,
-) -> tuple[list[StrengthTag], list[dict], PortraitSource]:
-    start_ts = int(recent_start.timestamp())
-    tags: list[StrengthTag] = []
-    evidence: list[dict] = []
-    from_contents = False
-    from_favorites = False
-    for item in contents:
-        if item.created_at < start_ts:
-            continue
-        hit = tags_from_text(item.title, item.summary)
-        if hit:
-            from_contents = True
-            _extend_unique(tags, hit)
-            _push_evidence(evidence, item.title, item.url, item.content_type)
-    for item in favorites:
-        if item.fav_time < start_ts:
-            continue
-        hit = tags_from_text(item.title, item.summary, item.extra_text)
-        if hit:
-            from_favorites = True
-            _extend_unique(tags, hit)
-            _push_evidence(evidence, item.title, item.url, "collection")
-    return (
-        tags,
-        evidence[:5],
-        _portrait_source(from_contents=from_contents, from_favorites=from_favorites),
-    )
-
-
-def _extend_unique(bucket: list[StrengthTag], found: list[StrengthTag]) -> None:
-    for tag in found:
-        if tag not in bucket:
-            bucket.append(tag)
-
-
-def _push_evidence(bucket: list[dict], title: str, url: str, content_type: str) -> None:
-    if len(bucket) >= 5:
-        return
-    bucket.append({"title": title, "url": url, "content_type": content_type})
+def _evidence_id(kind: EvidenceKind, url: str, title: str) -> str:
+    digest = sha256(f"{kind.value}\0{url}\0{title}".encode()).hexdigest()[:16]
+    return f"{kind.value}:{digest}"

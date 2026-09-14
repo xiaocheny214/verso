@@ -96,6 +96,13 @@ def test_portrait_splits_stable_and_recent(db: Session, settings: AppSettings) -
     assert StrengthTag.FITNESS.value in recent.strengths
     assert StrengthTag.PROGRAMMING.value not in recent.strengths
     assert stable.source == PortraitSource.CONTENTS
+    card = _portrait(db, redis, zhihu).card_for(user)
+    stable_view = next(item for item in card.portraits if item.horizon == PortraitHorizon.STABLE)
+    programming = next(
+        item for item in stable_view.strengths if item.tag == StrengthTag.PROGRAMMING
+    )
+    assert programming.evidence_title == "Python 开发笔记"
+    assert programming.evidence_url == "https://x/1"
 
 
 def test_self_report_when_empty(db: Session, settings: AppSettings) -> None:
@@ -130,7 +137,9 @@ def test_self_report_rejected_when_contents_exist(db: Session, settings: AppSett
     assert exc.value.code == BizCode.CONFLICT
 
 
-def test_portrait_from_favorites_when_no_posts(db: Session, settings: AppSettings) -> None:
+def test_favorites_do_not_claim_skill_and_still_allow_self_report(
+    db: Session, settings: AppSettings
+) -> None:
     now = int(datetime.now(UTC).timestamp())
     redis = FakeRedis()
     zhihu = FakeZhihu(
@@ -145,17 +154,15 @@ def test_portrait_from_favorites_when_no_posts(db: Session, settings: AppSetting
     stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
     recent = db.get(Portrait, (user.id, PortraitHorizon.RECENT_7D.value))
     assert stable is not None
-    assert StrengthTag.FITNESS.value in stable.strengths
-    assert stable.source == PortraitSource.FAVORITES
+    assert stable.strengths == []
     assert recent is not None
-    assert StrengthTag.FITNESS.value in recent.strengths
-    assert recent.source == PortraitSource.FAVORITES
-    with pytest.raises(BizException) as exc:
-        portrait.self_report(user, [StrengthTag.PROGRAMMING])
-    assert exc.value.code == BizCode.CONFLICT
+    assert recent.strengths == []
+    card = portrait.self_report(user, [StrengthTag.PROGRAMMING])
+    reported = next(item for item in card.portraits if item.horizon == PortraitHorizon.STABLE)
+    assert reported.strengths[0].source == PortraitSource.SELF_REPORTED
 
 
-def test_contents_failure_still_uses_favorites(db: Session, settings: AppSettings) -> None:
+def test_contents_failure_does_not_promote_favorites(db: Session, settings: AppSettings) -> None:
     class ContentsDown(FakeZhihu):
         def list_contents(self, access_token: str, *, limit: int = 50) -> list[ZhihuContent]:
             raise RuntimeError("contents down")
@@ -167,9 +174,7 @@ def test_contents_failure_still_uses_favorites(db: Session, settings: AppSetting
     user = auth.complete_login(code="a", nonce=auth.start_login().nonce).user
     _portrait(db, redis, zhihu).sync(user.id)
     stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
-    assert stable is not None
-    assert StrengthTag.PROGRAMMING.value in stable.strengths
-    assert stable.source == PortraitSource.FAVORITES
+    assert stable is None
 
 
 def test_fetch_failure_keeps_portrait_and_blocks_self_report(
