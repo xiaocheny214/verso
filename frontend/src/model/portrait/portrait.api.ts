@@ -1,8 +1,5 @@
-import { request } from "@/lib/http";
-
-import type { UserCard } from "./user-card.type";
+import { apiClient, unwrap } from "@/lib/http";
 
 export const portraitApi = {
-  syncPortrait: () =>
-    request<UserCard>("/me/portrait/sync", { method: "POST" }),
+  syncPortrait: async () => unwrap(await apiClient.POST("/me/portrait/sync")),
 };

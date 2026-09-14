@@ -1,7 +1,5 @@
-import { request } from "@/lib/http";
-
-import type { UserCard } from "./user-card.type";
+import { apiClient, unwrap } from "@/lib/http";
 
 export const userCardApi = {
-  me: () => request<UserCard>("/me"),
+  me: async () => unwrap(await apiClient.GET("/me")),
 };
