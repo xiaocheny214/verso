@@ -1,5 +1,5 @@
-import { request } from "@/lib/http";
+import { apiClient, unwrap } from "@/lib/http";
 
 export const oauthApi = {
-  authUrl: () => request<{ authorize_url: string }>("/auth/zhihu/url"),
+  authUrl: async () => unwrap(await apiClient.GET("/auth/zhihu/url")),
 };

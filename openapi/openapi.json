@@ -1,0 +1,1626 @@
+{
+  "components": {
+    "schemas": {
+      "AuthorizeUrlData": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url"
+        ],
+        "title": "AuthorizeUrlData",
+        "type": "object"
+      },
+      "CreateReviewBody": {
+        "properties": {
+          "exchange_id": {
+            "format": "uuid",
+            "title": "Exchange Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exchange_id"
+        ],
+        "title": "CreateReviewBody",
+        "type": "object"
+      },
+      "Eligibility": {
+        "enum": [
+          "active",
+          "suspended"
+        ],
+        "title": "Eligibility",
+        "type": "string"
+      },
+      "ExchangeStatus": {
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "ExchangeStatus",
+        "type": "string"
+      },
+      "ExchangeView": {
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closes_at": {
+            "format": "date-time",
+            "title": "Closes At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "title": "Opened At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExchangeStatus"
+          },
+          "user_a_id": {
+            "title": "User A Id",
+            "type": "string"
+          },
+          "user_b_id": {
+            "title": "User B Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_a_id",
+          "user_b_id",
+          "status",
+          "opened_at",
+          "closes_at"
+        ],
+        "title": "ExchangeView",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ListResponse_MessageView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "description": "业务数据列表",
+            "items": {
+              "$ref": "#/components/schemas/MessageView"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "description": "当前页码,从 1 开始",
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 0,
+            "description": "每页条数;0 表示不分页",
+            "minimum": 0.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          },
+          "total": {
+            "default": 0,
+            "description": "数据总数",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "ListResponse[MessageView]",
+        "type": "object"
+      },
+      "ListResponse_PairView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "description": "业务数据列表",
+            "items": {
+              "$ref": "#/components/schemas/PairView"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "description": "当前页码,从 1 开始",
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 0,
+            "description": "每页条数;0 表示不分页",
+            "minimum": 0.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          },
+          "total": {
+            "default": 0,
+            "description": "数据总数",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "ListResponse[PairView]",
+        "type": "object"
+      },
+      "MatchConditionStatus": {
+        "enum": [
+          "waiting",
+          "matched",
+          "cancelled"
+        ],
+        "title": "MatchConditionStatus",
+        "type": "string"
+      },
+      "MatchConditionView": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "pair_closes_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Closes At"
+          },
+          "pair_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Id"
+          },
+          "peer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchPeerView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/MatchConditionStatus"
+          },
+          "waiting_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Until"
+          },
+          "want_tag": {
+            "$ref": "#/components/schemas/StrengthTag"
+          },
+          "want_text": {
+            "title": "Want Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "want_text",
+          "want_tag",
+          "status"
+        ],
+        "title": "MatchConditionView",
+        "type": "object"
+      },
+      "MatchPeerView": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "strengths": {
+            "items": {
+              "$ref": "#/components/schemas/StrengthTag"
+            },
+            "title": "Strengths",
+            "type": "array"
+          },
+          "want_tag": {
+            "$ref": "#/components/schemas/StrengthTag"
+          },
+          "want_text": {
+            "title": "Want Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "want_text",
+          "want_tag",
+          "score"
+        ],
+        "title": "MatchPeerView",
+        "type": "object"
+      },
+      "MessageView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "exchange_id": {
+            "title": "Exchange Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "sender_id": {
+            "title": "Sender Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "exchange_id",
+          "sender_id",
+          "text",
+          "created_at"
+        ],
+        "title": "MessageView",
+        "type": "object"
+      },
+      "PairView": {
+        "description": "配上之后给会话列表看的对方名片。",
+        "properties": {
+          "exchange_id": {
+            "title": "Exchange Id",
+            "type": "string"
+          },
+          "peer_avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peer Avatar Url"
+          },
+          "peer_id": {
+            "title": "Peer Id",
+            "type": "string"
+          },
+          "peer_name": {
+            "title": "Peer Name",
+            "type": "string"
+          },
+          "peer_strengths": {
+            "items": {
+              "$ref": "#/components/schemas/StrengthTag"
+            },
+            "title": "Peer Strengths",
+            "type": "array"
+          },
+          "peer_want_text": {
+            "title": "Peer Want Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exchange_id",
+          "peer_id",
+          "peer_name",
+          "peer_want_text"
+        ],
+        "title": "PairView",
+        "type": "object"
+      },
+      "PortraitHorizon": {
+        "description": "画像时间窗：长期稳定 vs 近 7 天。",
+        "enum": [
+          "stable",
+          "recent_7d"
+        ],
+        "title": "PortraitHorizon",
+        "type": "string"
+      },
+      "PortraitSource": {
+        "description": "擅长从哪来。创作优先，否则用收藏；都没有才允许自报。",
+        "enum": [
+          "contents",
+          "favorites",
+          "self_reported"
+        ],
+        "title": "PortraitSource",
+        "type": "string"
+      },
+      "PortraitView": {
+        "properties": {
+          "horizon": {
+            "$ref": "#/components/schemas/PortraitHorizon"
+          },
+          "strengths": {
+            "items": {
+              "$ref": "#/components/schemas/Strength"
+            },
+            "title": "Strengths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "horizon"
+        ],
+        "title": "PortraitView",
+        "type": "object"
+      },
+      "ReputationView": {
+        "properties": {
+          "eligibility": {
+            "$ref": "#/components/schemas/Eligibility",
+            "default": "active"
+          },
+          "min_active_score": {
+            "default": 60,
+            "title": "Min Active Score",
+            "type": "integer"
+          },
+          "score": {
+            "default": 65,
+            "title": "Score",
+            "type": "integer"
+          },
+          "score_max": {
+            "default": 100,
+            "title": "Score Max",
+            "type": "integer"
+          },
+          "suspended_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspended Until"
+          }
+        },
+        "title": "ReputationView",
+        "type": "object"
+      },
+      "Response_AuthorizeUrlData_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthorizeUrlData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[AuthorizeUrlData]",
+        "type": "object"
+      },
+      "Response_ExchangeView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExchangeView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[ExchangeView]",
+        "type": "object"
+      },
+      "Response_MatchConditionView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchConditionView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[MatchConditionView]",
+        "type": "object"
+      },
+      "Response_MessageView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[MessageView]",
+        "type": "object"
+      },
+      "Response_NoneType_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "description": "业务数据",
+            "title": "Data",
+            "type": "null"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[NoneType]",
+        "type": "object"
+      },
+      "Response_ReputationView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReputationView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[ReputationView]",
+        "type": "object"
+      },
+      "Response_ReviewView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[ReviewView]",
+        "type": "object"
+      },
+      "Response_UserCard_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserCard"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[UserCard]",
+        "type": "object"
+      },
+      "ReviewVerdict": {
+        "description": "人先点不满意，模型只回答是不是真的差。",
+        "enum": [
+          "poor",
+          "good",
+          "unclear"
+        ],
+        "title": "ReviewVerdict",
+        "type": "string"
+      },
+      "ReviewView": {
+        "properties": {
+          "exchange_id": {
+            "title": "Exchange Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "reviewee_id": {
+            "title": "Reviewee Id",
+            "type": "string"
+          },
+          "reviewer_id": {
+            "title": "Reviewer Id",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/ReviewVerdict"
+          }
+        },
+        "required": [
+          "id",
+          "exchange_id",
+          "reviewer_id",
+          "reviewee_id",
+          "verdict"
+        ],
+        "title": "ReviewView",
+        "type": "object"
+      },
+      "SelfReportBody": {
+        "properties": {
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/StrengthTag"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tags"
+        ],
+        "title": "SelfReportBody",
+        "type": "object"
+      },
+      "SendMessageBody": {
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SendMessageBody",
+        "type": "object"
+      },
+      "Strength": {
+        "properties": {
+          "evidence_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Title"
+          },
+          "evidence_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Url"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PortraitSource"
+          },
+          "tag": {
+            "$ref": "#/components/schemas/StrengthTag"
+          }
+        },
+        "required": [
+          "tag",
+          "source"
+        ],
+        "title": "Strength",
+        "type": "object"
+      },
+      "StrengthTag": {
+        "description": "擅长 / 本次想学的闭集标签。匹配只在这个集合里做双向覆盖。",
+        "enum": [
+          "编程",
+          "互联网",
+          "健身",
+          "运动训练",
+          "职场",
+          "学业",
+          "理财",
+          "写作",
+          "设计",
+          "医学健康",
+          "法律",
+          "其他"
+        ],
+        "title": "StrengthTag",
+        "type": "string"
+      },
+      "SubmitConditionBody": {
+        "properties": {
+          "want_tag": {
+            "$ref": "#/components/schemas/StrengthTag"
+          },
+          "want_text": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Want Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "want_text",
+          "want_tag"
+        ],
+        "title": "SubmitConditionBody",
+        "type": "object"
+      },
+      "UserCard": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "portraits": {
+            "items": {
+              "$ref": "#/components/schemas/PortraitView"
+            },
+            "title": "Portraits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "UserCard",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Verso",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/zhihu/callback": {
+      "get": {
+        "operationId": "zhihu_callback_auth_zhihu_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "authorization_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zhihu Callback",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/zhihu/url": {
+      "get": {
+        "operationId": "zhihu_login_url_auth_zhihu_url_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_AuthorizeUrlData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Zhihu Login Url",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/exchanges/me": {
+      "get": {
+        "operationId": "list_mine_exchanges_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_PairView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Mine",
+        "tags": [
+          "exchange"
+        ]
+      }
+    },
+    "/exchanges/{exchange_id}": {
+      "get": {
+        "operationId": "get_exchange_exchanges__exchange_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exchange_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exchange Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_ExchangeView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Exchange",
+        "tags": [
+          "exchange"
+        ]
+      }
+    },
+    "/exchanges/{exchange_id}/close": {
+      "post": {
+        "operationId": "close_exchange_exchanges__exchange_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exchange_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exchange Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_ExchangeView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close Exchange",
+        "tags": [
+          "exchange"
+        ]
+      }
+    },
+    "/exchanges/{exchange_id}/messages": {
+      "get": {
+        "operationId": "list_messages_exchanges__exchange_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exchange_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exchange Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_MessageView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Messages",
+        "tags": [
+          "exchange"
+        ]
+      },
+      "post": {
+        "operationId": "send_message_exchanges__exchange_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exchange_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exchange Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_MessageView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Message",
+        "tags": [
+          "exchange"
+        ]
+      }
+    },
+    "/match/conditions": {
+      "post": {
+        "operationId": "submit_condition_match_conditions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitConditionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_MatchConditionView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Condition",
+        "tags": [
+          "match"
+        ]
+      }
+    },
+    "/match/conditions/cancel": {
+      "post": {
+        "operationId": "cancel_condition_match_conditions_cancel_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_MatchConditionView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Cancel Condition",
+        "tags": [
+          "match"
+        ]
+      }
+    },
+    "/match/conditions/me": {
+      "get": {
+        "operationId": "current_condition_match_conditions_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_MatchConditionView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Current Condition",
+        "tags": [
+          "match"
+        ]
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "me_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_UserCard_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/me/portrait/self-report": {
+      "post": {
+        "operationId": "self_report_me_portrait_self_report_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelfReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_UserCard_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Self Report",
+        "tags": [
+          "portrait"
+        ]
+      }
+    },
+    "/me/portrait/sync": {
+      "post": {
+        "operationId": "sync_portrait_me_portrait_sync_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_UserCard_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sync Portrait",
+        "tags": [
+          "portrait"
+        ]
+      }
+    },
+    "/me/reputation": {
+      "get": {
+        "operationId": "me_reputation_me_reputation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_ReputationView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me Reputation",
+        "tags": [
+          "reputation"
+        ]
+      }
+    },
+    "/reviews": {
+      "post": {
+        "operationId": "create_review_reviews_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_ReviewView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Review",
+        "tags": [
+          "quality"
+        ]
+      }
+    }
+  }
+}

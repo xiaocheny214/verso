@@ -9,5 +9,11 @@
   "bracketSpacing": true,
   "arrowParens": "always",
   "endOfLine": "lf",
-  "ignorePatterns": ["**/node_modules/**", ".next/**", "dist/**", "coverage/**"]
+  "ignorePatterns": [
+    "**/node_modules/**",
+    ".next/**",
+    "dist/**",
+    "coverage/**",
+    "src/lib/api/schema.d.ts"
+  ]
 }

@@ -45,7 +45,7 @@ export function MatchExplanation({ match }: { match: MatchCondition }) {
                   {peer.name}
                 </span>
                 <span className="text-xs text-slate-400 block">
-                  能提供：{peer.strengths.join(" · ")}
+                  能提供：{(peer.strengths ?? []).join(" · ")}
                 </span>
               </div>
             </div>

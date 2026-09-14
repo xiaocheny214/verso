@@ -122,7 +122,7 @@ export default function MatchPage() {
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-800 bg-white"
                   >
                     <option value="健身">健身 & 训练计划</option>
-                    <option value="训练">力量与体态指导</option>
+                    <option value="运动训练">力量与体态指导</option>
                     <option value="互联网">互联网 & 产品思维</option>
                     <option value="编程">编程与工程架构</option>
                     <option value="写作">内容表达与写作</option>

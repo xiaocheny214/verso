@@ -1,15 +1,14 @@
-import { request } from "@/lib/http";
+import { apiClient, unwrap } from "@/lib/http";
 import type { StrengthTag } from "@/model/portrait";
 
-import type { MatchCondition } from "./ticket.type";
-
 export const ticketApi = {
-  submitMatch: (wantText: string, wantTag: StrengthTag) =>
-    request<MatchCondition>("/match/conditions", {
-      method: "POST",
-      body: JSON.stringify({ want_text: wantText, want_tag: wantTag }),
-    }),
-  currentMatch: () => request<MatchCondition>("/match/conditions/me"),
-  cancelMatch: () =>
-    request<MatchCondition>("/match/conditions/cancel", { method: "POST" }),
+  submitMatch: async (wantText: string, wantTag: StrengthTag) =>
+    unwrap(
+      await apiClient.POST("/match/conditions", {
+        body: { want_text: wantText, want_tag: wantTag },
+      }),
+    ),
+  currentMatch: async () => unwrap(await apiClient.GET("/match/conditions/me")),
+  cancelMatch: async () =>
+    unwrap(await apiClient.POST("/match/conditions/cancel")),
 };

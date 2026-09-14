@@ -13,6 +13,7 @@ export const demoMatch: MatchCondition = {
     name: "周衡",
     want_text: "怎样把线下训练经验做成一个有人持续使用的互联网产品？",
     want_tag: "互联网",
-    strengths: ["健身", "训练"],
+    strengths: ["健身", "运动训练"],
+    score: 65,
   },
 };

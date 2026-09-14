@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
 from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
@@ -27,6 +28,10 @@ router = APIRouter(tags=["auth"])
 AuthDep = Annotated[AuthService, Depends(get_auth_service)]
 PortraitDep = Annotated[PortraitService, Depends(get_portrait_service)]
 UserDep = Annotated[User, Depends(get_current_user)]
+
+
+class AuthorizeUrlData(BaseModel):
+    authorize_url: str
 
 
 def _set_intent_cookie(response: JSONResponse, nonce: str) -> None:
@@ -53,7 +58,7 @@ def _set_session_cookie(response: RedirectResponse, session_id: str) -> None:
     )
 
 
-@router.get("/auth/zhihu/url")
+@router.get("/auth/zhihu/url", response_model=ApiResponse[AuthorizeUrlData])
 def zhihu_login_url(auth: AuthDep) -> JSONResponse:
     started = auth.start_login()
     payload = ApiResponse.success({"authorize_url": started.authorize_url}).model_dump(mode="json")
@@ -62,7 +67,7 @@ def zhihu_login_url(auth: AuthDep) -> JSONResponse:
     return response
 
 
-@router.get("/auth/zhihu/callback")
+@router.get("/auth/zhihu/callback", response_class=RedirectResponse, status_code=302)
 def zhihu_callback(
     auth: AuthDep,
     portrait: PortraitDep,
@@ -84,7 +89,7 @@ def zhihu_callback(
     return response
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", response_model=ApiResponse[None])
 def logout(request: Request, auth: AuthDep) -> JSONResponse:
     settings = get_app_settings()
     auth.logout(request.cookies.get(settings.session_cookie) or "")

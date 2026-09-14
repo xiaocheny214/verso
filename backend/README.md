@@ -27,6 +27,8 @@ uv run pytest
 
 HTTP 统一返回 `{code, message, data}`，HTTP 状态码恒 200，业务对错看 `code`。领域错误抛 `BizException`。知乎回调是浏览器跳转，使用 302。
 
+OpenAPI 文档由 FastAPI 提供：启动后访问 `http://localhost:8000/docs`，原始规范位于 `http://localhost:8000/openapi.json`。提交接口变更前，在 `frontend/` 执行 `pnpm openapi:sync` 更新仓库内规范和前端类型；`pnpm openapi:check` 可检查生成产物是否与后端一致。
+
 登录（[#34](https://github.com/xiaocheny214/verso/issues/34) / [#47](https://github.com/xiaocheny214/verso/issues/47)）：
 
 - `GET /auth/zhihu/url` 返回授权地址，并种 intent Cookie

@@ -8,10 +8,14 @@
     "start": "next start",
     "lint": "oxlint",
     "format": "oxfmt --write",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm openapi:check && tsc --noEmit",
     "lint:fix": "oxlint --fix",
     "format:check": "oxfmt --check",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "openapi:export": "uv --directory ../backend run python scripts/export_openapi.py ../openapi/openapi.json",
+    "openapi:generate": "openapi-typescript ../openapi/openapi.json -o src/lib/api/schema.d.ts",
+    "openapi:sync": "pnpm openapi:export && pnpm openapi:generate",
+    "openapi:check": "uv --directory ../backend run python scripts/export_openapi.py ../openapi/openapi.json --check && openapi-typescript ../openapi/openapi.json | diff - src/lib/api/schema.d.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -20,6 +24,7 @@
     "cn": "^0.2.6",
     "lucide-react": "^1.44.0",
     "next": "16.3.4",
+    "openapi-fetch": "^0.17.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "shadcn": "^4.21.0",
@@ -33,6 +38,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "lefthook": "^2.1.12",
+    "openapi-typescript": "^7.13.0",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
     "tailwindcss": "^4",
