@@ -9,6 +9,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from verso_app.server.auth.models import User
+from verso_app.server.match.compatibility import (
+    MAX_COMPATIBILITY_CANDIDATES,
+    DirectionInput,
+)
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.models import Portrait
@@ -50,6 +54,16 @@ class FakeExchange:
         )
 
 
+class RecordingCompatibility:
+    def __init__(self, *, allowed: bool) -> None:
+        self.allowed = allowed
+        self.calls: list[tuple[DirectionInput, DirectionInput]] = []
+
+    def allows(self, directions: tuple[DirectionInput, DirectionInput]) -> bool:
+        self.calls.append(directions)
+        return self.allowed
+
+
 @pytest.fixture
 def db() -> Session:
     engine = create_engine(
@@ -71,6 +85,7 @@ def _user(
     recent: list[StrengthTag] | None = None,
     eligibility: Eligibility = Eligibility.ACTIVE,
     score: int = REPUTATION_INITIAL_SCORE,
+    evidence: dict[StrengthTag, str] | None = None,
 ) -> User:
     now = datetime.now(UTC)
     user = User(
@@ -87,7 +102,16 @@ def _user(
             kind=PortraitHorizon.STABLE.value,
             strengths=[tag.value for tag in stable],
             source=PortraitSource.CONTENTS.value,
-            evidence=[],
+            evidence=[
+                {
+                    "tag": tag.value,
+                    "title": title,
+                    "url": f"https://example.test/{name.lower()}/{tag.name.lower()}",
+                    "confidence": 90,
+                    "reason": "本人实践复盘",
+                }
+                for tag, title in (evidence or {}).items()
+            ],
             synced_at=now,
         )
     )
@@ -156,6 +180,92 @@ def test_complementary_pair_shares_pair_id(db: Session) -> None:
     assert matched.pair_closes_at is not None
     delta = matched.pair_closes_at - datetime.now(UTC)
     assert timedelta(hours=PAIR_WINDOW_HOURS - 1) < delta <= timedelta(hours=PAIR_WINDOW_HOURS)
+
+
+def test_specific_evidence_can_block_a_coarse_tag_match(db: Session) -> None:
+    evaluator = RecordingCompatibility(allowed=False)
+    service = MatchService(db, compatibility=evaluator)
+    alice = _user(
+        db,
+        name="Alice",
+        stable=[StrengthTag.CAREER],
+        evidence={StrengthTag.CAREER: "工作十年后的管理岗跳槽复盘"},
+    )
+    bob = _user(
+        db,
+        name="Bob",
+        stable=[StrengthTag.FITNESS],
+        evidence={StrengthTag.FITNESS: "徒手健身入门训练复盘"},
+    )
+    service.submit(alice, want_text="第一次徒手训练如何安排", want_tag=StrengthTag.FITNESS)
+
+    result = service.submit(
+        bob,
+        want_text="大一学生第一次找实习，项目经历应该怎么准备",
+        want_tag=StrengthTag.CAREER,
+    )
+
+    assert result.status == MatchConditionStatus.WAITING
+    assert len(evaluator.calls) == 1
+    directions = evaluator.calls[0]
+    assert {item.requested_tag for item in directions} == {
+        StrengthTag.CAREER,
+        StrengthTag.FITNESS,
+    }
+    career = next(item for item in directions if item.requested_tag == StrengthTag.CAREER)
+    assert career.candidate_evidence[0].title == "工作十年后的管理岗跳槽复盘"
+
+
+def test_specific_evidence_allows_pair_only_after_both_directions_pass(db: Session) -> None:
+    evaluator = RecordingCompatibility(allowed=True)
+    service = MatchService(db, compatibility=evaluator)
+    alice = _user(db, name="Alice", stable=[StrengthTag.INTERNET])
+    bob = _user(db, name="Bob", stable=[StrengthTag.FITNESS])
+    service.submit(alice, want_text="第一次徒手训练如何安排", want_tag=StrengthTag.FITNESS)
+
+    result = service.submit(
+        bob,
+        want_text="怎样访谈健身工作室会员",
+        want_tag=StrengthTag.INTERNET,
+    )
+
+    assert result.status == MatchConditionStatus.MATCHED
+    assert len(evaluator.calls) == 1
+
+
+def test_specific_evaluator_only_sees_coarse_compatible_candidates(db: Session) -> None:
+    evaluator = RecordingCompatibility(allowed=True)
+    service = MatchService(db, compatibility=evaluator)
+    alice = _user(db, name="Alice", stable=[StrengthTag.PROGRAMMING])
+    bob = _user(db, name="Bob", stable=[StrengthTag.FITNESS])
+    service.submit(alice, want_text="怎样开始健身", want_tag=StrengthTag.FITNESS)
+
+    result = service.submit(bob, want_text="怎样写作", want_tag=StrengthTag.WRITING)
+
+    assert result.status == MatchConditionStatus.WAITING
+    assert evaluator.calls == []
+
+
+def test_specific_evaluator_has_a_candidate_limit(db: Session) -> None:
+    evaluator = RecordingCompatibility(allowed=False)
+    service = MatchService(db, compatibility=evaluator)
+    for index in range(MAX_COMPATIBILITY_CANDIDATES + 2):
+        candidate = _user(
+            db,
+            name=f"Candidate{index}",
+            stable=[StrengthTag.FITNESS],
+        )
+        service.submit(
+            candidate,
+            want_text="怎样做互联网产品",
+            want_tag=StrengthTag.INTERNET,
+        )
+    mine = _user(db, name="Mine", stable=[StrengthTag.INTERNET])
+
+    result = service.submit(mine, want_text="怎样开始健身", want_tag=StrengthTag.FITNESS)
+
+    assert result.status == MatchConditionStatus.WAITING
+    assert len(evaluator.calls) == MAX_COMPATIBILITY_CANDIDATES
 
 
 def test_one_way_and_same_tag_stay_waiting(db: Session) -> None:

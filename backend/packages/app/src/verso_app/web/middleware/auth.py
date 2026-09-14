@@ -11,6 +11,7 @@ from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.exchange.service import ExchangeService
+from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.extractor import build_evidence_classifier
 from verso_app.server.portrait.service import PortraitService
@@ -54,10 +55,12 @@ PortraitDep = Annotated[PortraitService, Depends(get_portrait_service)]
 
 
 def get_match_service(session: SessionDep) -> MatchService:
+    settings = get_app_settings()
     return MatchService(
         session=session,
         exchange=ExchangeService(session),
-        reputation=ReputationService(settings=get_app_settings()),
+        reputation=ReputationService(settings=settings),
+        compatibility=build_pair_compatibility_evaluator(settings),
     )
 
 
