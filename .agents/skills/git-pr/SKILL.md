@@ -1,6 +1,6 @@
 ---
 name: git-pr
-description: Draft concise Git PR titles and descriptions from a committed branch diff, follow the repository's pull request template and required issue/checklist rules, verify branch-triggered CI locally, and submit with GitHub CLI only after approval. Use whenever the user asks to prepare, review, create, or update PR metadata.
+description: Draft concise Git PR titles and descriptions from a committed branch diff by reading the current repository's PR template, preserving required sections, and omitting empty Optional sections. Verify branch-triggered CI locally and submit with GitHub CLI only after approval. Use whenever the user asks to prepare, review, create, or update PR metadata.
 ---
 
 # Git PR Writing
@@ -20,7 +20,10 @@ Draft PR metadata from committed branch diff. Do not invent context or verificat
    - `git diff --stat <base>...HEAD`
    - `git diff --name-status <base>...HEAD`
    - `git diff --find-renames --find-copies <base>...HEAD`
-4. Read `.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `CONTRIBUTING.md`, and repository-local instructions. Active template is source of truth.
+4. Resolve and read the active PR template from the current repository:
+   - Prefer `.github/pull_request_template.md` when it exists.
+   - Otherwise inspect `.github/PULL_REQUEST_TEMPLATE/` and select the template matching the PR context. If multiple templates are equally applicable and the choice would change the PR body, ask the user.
+   - Read the selected template in full, along with `CONTRIBUTING.md` and repository-local instructions. The repository template is the source of truth; never use a template hardcoded in this skill when a repository template exists.
 5. Read relevant commits/files until behavior, implementation, and verification are clear.
 6. Identify PR-triggered CI and run local equivalents where available.
 7. Resolve the fork push target:
@@ -35,9 +38,11 @@ Draft PR metadata from committed branch diff. Do not invent context or verificat
 - Branch diff is source of truth.
 - Ignore unrelated unstaged/uncommitted work unless user asks for working-tree draft.
 - Do not invent tests, screenshots, issue links, metrics, or outcomes.
-- If verification was not run, write `Not run (reason).`
+- If verification was not run, write `Not run (reason).` in a required Testing section.
 - Do not omit or rename a required repository-template section. Preserve its order and checklist items.
 - Strip prompt annotations such as `(Required)` and `(Optional)` from section headings in the final PR body.
+- Treat Optional sections as conditional output: keep an Optional section only when the diff or verified context provides concrete content for it; otherwise remove the entire section, including its heading, placeholder, comments, and blank body. Do not leave empty Optional headings or filler such as `Not included` or `None`.
+- Apply the same rule to optional checklist items or optional subsections: omit them when they have no applicable content, while preserving required checklist items exactly.
 - For a required related-issue field, use only a user-provided or evidence-backed `Closes #123`, `Part of #123`, or `None`.
 - Mark checklist items `[x]` only when the diff or recorded verification supports them; otherwise leave them unchecked and explain why.
 - Keep reviewer-focused. Skip implementation trivia.
@@ -74,43 +79,11 @@ Add `--draft`, `--reviewer <handle>`, or `--web` only when requested.
 
 Types: `feat`, `fix`, `refactor`, `perf`, `docs`, `style`, `test`, `build`, `ci`, `chore`, `revert`.
 
-## Repository Body Template
+## Body Generation
 
-Current project template. Active repository template still wins.
+Generate the PR body from the active template resolved in the current repository. Preserve required section order, required headings, required checklist items, and any repository-specific wording that remains applicable. Remove HTML comments and prompt annotations such as `(Required)` and `(Optional)` from the final body.
 
-```markdown
-## Change Description (Required)
-
-- <problem solved and observable change>
-
-## Implementation Approach (Required)
-
-- <important implementation details and boundaries>
-
-## Related Issue (Required)
-
-<Closes #123 | Part of #123 | None>
-
-## Testing (Required)
-
-- [x] `<exact command or check>` - <result>
-- [ ] Not run (<reason>)
-
-## Screenshots or Recordings (Optional)
-
-<visual evidence, or Not included.>
-
-## Risks and Follow-ups (Optional)
-
-<known risks or deferred work, or None identified.>
-
-## Checklist (Required)
-
-- [ ] The PR is focused and does not include unrelated changes.
-- [ ] Asset names, formats, dimensions, and metadata follow project conventions.
-- [ ] Licensing and attribution information is included or unchanged as appropriate.
-- [ ] Documentation or examples were updated when needed.
-```
+For each Optional section, decide whether there is concrete content supported by the branch diff, verification results, or user-provided context. If there is none, delete that section as a whole. Do not replace it with a placeholder, `Not included`, `None`, or an empty heading. This cleanup happens after drafting and before `gh pr create`.
 
 If no repository template exists, use the generic fallback below.
 
@@ -131,13 +104,5 @@ If no repository template exists, use the generic fallback below.
 ```
 
 Description: 1-4 bullets: purpose, behavior, observable effect. Implementation: 1-3 bullets: approach, boundaries, reused libs. Testing: only checks run/result; otherwise `Not run (reason)`.
-
-Optional:
-
-- `## Why`
-- `## Screenshots`
-- `## Risks`
-- `## Follow-ups`
-- `## Related`
 
 If user asks only title or only body, return only requested piece.
