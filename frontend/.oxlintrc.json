@@ -81,6 +81,66 @@
         "react_perf/jsx-no-new-function-as-prop": "off",
         "react_perf/jsx-no-jsx-as-prop": "off"
       }
+    },
+    {
+      "files": ["src/model/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@/components",
+                  "@/components/**",
+                  "@/app",
+                  "@/app/**"
+                ],
+                "message": "Model layer must not import from UI components or app pages."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/lib/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@/model",
+                  "@/model/**",
+                  "@/components",
+                  "@/components/**",
+                  "@/app",
+                  "@/app/**"
+                ],
+                "message": "Lib layer is purely business-agnostic and must not depend on model, components, or app."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/components/**", "src/app/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/model/*/*", "@/model/*/**/*"],
+                "message": "Do not import internal files of model modules. Import from module root (e.g. @/model/auth, @/model/match, @/model/exchange) instead."
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "env": {

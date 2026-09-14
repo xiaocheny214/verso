@@ -1,4 +1,4 @@
-import type { MatchCondition } from "@/lib/contracts";
+import type { MatchCondition } from "@/model/match";
 
 export function MatchExplanation({ match }: { match: MatchCondition }) {
   const peer = match.peer;

@@ -4,8 +4,9 @@ import Link from "next/link";
 import { type FormEvent, useState, useSyncExternalStore } from "react";
 
 import { AppFrame } from "@/components/app-frame";
-import type { ExchangeMessage } from "@/lib/contracts";
-import { demoMatch, demoMessages } from "@/lib/demo-data";
+import type { ExchangeMessage } from "@/model/exchange";
+import { demoMessages } from "@/model/exchange";
+import { demoMatch } from "@/model/match";
 
 type ExchangeDemoState = "open" | "empty" | "closed" | "error";
 

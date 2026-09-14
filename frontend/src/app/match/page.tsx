@@ -5,7 +5,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { AppFrame } from "@/components/app-frame";
 import { MatchExplanation } from "@/components/match-explanation";
-import { demoMatch } from "@/lib/demo-data";
+import { demoMatch } from "@/model/match";
 
 type MatchDemoState = "compose" | "waiting" | "matched" | "cancelled" | "error";
 
