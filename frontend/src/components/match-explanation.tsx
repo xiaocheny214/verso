@@ -16,8 +16,12 @@ export function MatchExplanation({ match }: { match: MatchCondition }) {
                 林
               </div>
               <div>
-                <span className="font-bold text-slate-900 text-sm block">林屿</span>
-                <span className="text-xs text-slate-400 block">能提供：互联网 · 编程</span>
+                <span className="font-bold text-slate-900 text-sm block">
+                  林屿
+                </span>
+                <span className="text-xs text-slate-400 block">
+                  能提供：互联网 · 编程
+                </span>
               </div>
             </div>
             <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold">
@@ -37,7 +41,9 @@ export function MatchExplanation({ match }: { match: MatchCondition }) {
                 周
               </div>
               <div>
-                <span className="font-bold text-slate-900 text-sm block">{peer.name}</span>
+                <span className="font-bold text-slate-900 text-sm block">
+                  {peer.name}
+                </span>
                 <span className="text-xs text-slate-400 block">
                   能提供：{peer.strengths.join(" · ")}
                 </span>
