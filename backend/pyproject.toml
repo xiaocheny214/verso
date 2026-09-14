@@ -45,4 +45,5 @@ pythonpath = [
     "packages/common/src",
     "packages/framework/src",
     "packages/app/src",
+    "tests",
 ]

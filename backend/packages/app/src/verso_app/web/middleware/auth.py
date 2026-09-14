@@ -10,11 +10,12 @@ from verso_framework.config import get_app_settings
 from verso_framework.db import get_redis, get_session
 from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClient
 
+from verso_app.server.auth.models import User
+from verso_app.server.auth.service import AuthService
+from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.exchange.service import ExchangeService
-from verso_app.server.identity.models import User
-from verso_app.server.identity.service import IdentityService
-from verso_app.server.identity.session_store import SessionStore
 from verso_app.server.match.service import MatchService
+from verso_app.server.portrait.service import PortraitService
 from verso_app.server.quality.judge import build_judge
 from verso_app.server.quality.service import QualityService
 from verso_app.server.reputation.service import ReputationService
@@ -22,19 +23,27 @@ from verso_app.server.reputation.service import ReputationService
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-def get_identity_service(session: SessionDep) -> IdentityService:
+def get_auth_service(session: SessionDep) -> AuthService:
     settings = get_app_settings()
-    return IdentityService(
+    return AuthService(
         session=session,
         store=SessionStore(get_redis()),
         oauth=HttpxOAuthClient(settings),
-        zhihu=HttpxUserDataClient(settings),
         reputation=ReputationService(),
         settings=settings,
     )
 
 
-IdentityDep = Annotated[IdentityService, Depends(get_identity_service)]
+def get_portrait_service(session: SessionDep) -> PortraitService:
+    return PortraitService(
+        session=session,
+        grants=SessionStore(get_redis()),
+        zhihu=HttpxUserDataClient(get_app_settings()),
+    )
+
+
+AuthDep = Annotated[AuthService, Depends(get_auth_service)]
+PortraitDep = Annotated[PortraitService, Depends(get_portrait_service)]
 
 
 def get_match_service(session: SessionDep) -> MatchService:
@@ -54,5 +63,5 @@ def get_quality_service(session: SessionDep) -> QualityService:
     )
 
 
-def get_current_user(request: Request, identity: IdentityDep) -> User:
-    return identity.require_user(request.cookies.get(get_app_settings().session_cookie))
+def get_current_user(request: Request, auth: AuthDep) -> User:
+    return auth.require_user(request.cookies.get(get_app_settings().session_cookie))

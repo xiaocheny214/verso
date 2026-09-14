@@ -1,7 +1,7 @@
 # Verso backend
 
 uv workspace：`common → framework → app`。分层说明见 [`docs/architecture.md`](../docs/architecture.md)。
-产品模块以 [#30](https://github.com/xiaocheny214/verso/issues/30) / [#31](https://github.com/xiaocheny214/verso/issues/31) 为准：`identity` / `match` / `exchange` / `quality` / `reputation`。
+产品模块以 [#30](https://github.com/xiaocheny214/verso/issues/30) / [#31](https://github.com/xiaocheny214/verso/issues/31) 为准：`auth` / `portrait` / `match` / `exchange` / `quality` / `reputation`。
 
 ```bash
 cp .env.example .env
@@ -16,10 +16,10 @@ uv run python -m verso_app.bootstrap.worker
 
 HTTP 统一返回 `{code, message, data}`，HTTP 状态码恒 200，业务对错看 `code`。领域错误抛 `BizException`。知乎回调是浏览器跳转，使用 302。
 
-登录（[#34](https://github.com/xiaocheny214/verso/issues/34)）：
+登录（[#34](https://github.com/xiaocheny214/verso/issues/34) / [#47](https://github.com/xiaocheny214/verso/issues/47)）：
 
 - `GET /auth/zhihu/url` 返回授权地址，并种 intent Cookie
-- `GET /auth/zhihu/callback` 换票、建用户、开声望、采画像，种 session 后 302 回 `VERSO_PUBLIC_ORIGIN`
+- `GET /auth/zhihu/callback` 换票、建用户、开声望、种 session；画像由 `portrait` 同步，失败不挡登录，随后 302 回 `VERSO_PUBLIC_ORIGIN`
 - `POST /auth/logout`
 - `GET /me`
 - `POST /me/portrait/sync`

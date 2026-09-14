@@ -62,7 +62,7 @@ type(scope): subject
 ```
 
 - `type` 常用：`feat`、`fix`、`docs`、`ci`、`chore`、`refactor`、`test`、`style`、`perf`、`revert`。
-- `scope` 可选，小写英文，如 `contributing`、`identity`、`match`、`exchange`。
+- `scope` 可选，小写英文，如 `contributing`、`auth`、`portrait`、`match`、`exchange`。
 - `subject` 用现在时、不以句号结尾；中英文均可。
 - 解决某个 Issue 时，在 subject 末尾或正文写 `#12` / `Closes #12`。
 - 第一行建议不超过 120 个字符。
@@ -112,7 +112,7 @@ ci: enforce commit and branch naming (#2)
 
 工程尚未冻结 OpenAPI。接口代码出现后，前后端以仓库内唯一契约文件为准（由 `verso_app.web` 生成，禁止长期手写两套）。
 
-后端是 uv workspace：`verso-common` → `verso-framework` → `verso-app`。领域逻辑只放 `server`。`identity / match / exchange / quality / reputation` 各自持有自己的状态；`server` 内模块通过明确服务接口协作。`web` / `worker` 只调 `server`，不直连 LLM 提供方。分层由 import-linter 约束包边界，不要为了图快让 web 去调 framework。
+后端是 uv workspace：`verso-common` → `verso-framework` → `verso-app`。领域逻辑只放 `server`。`auth / portrait / match / exchange / quality / reputation` 各自持有自己的状态；`server` 内模块通过明确服务接口协作。`web` / `worker` 只调 `server`，不直连 LLM 提供方。分层由 import-linter 约束包边界，不要为了图快让 web 去调 framework。
 
 - 变更路由、参数、模型或描述时，在同一 PR 里更新契约并提交。
 - 契约与实现不一致时，以「先改契约 Issue、再改代码」为序，不要在前端猜字段。

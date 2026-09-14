@@ -48,11 +48,12 @@ B 是教练，想搞懂互联网
 认证 → 画像 → 匹配 → 异步交流 → 质量评估
 ```
 
-1. `identity`：知乎 OAuth、授权数据和可追溯的擅长画像。
-2. `match`：本次求知 Ticket 和双向互补配对。
-3. `exchange`：24 小时异步互答与后续交流。
-4. `quality`：对方不满意后评估本次回答。
-5. `reputation`：记录评估结果和匹配资格。
+1. `auth`：知乎 OAuth、站内用户和授权数据。
+2. `portrait`：从授权数据生成可追溯的擅长画像。
+3. `match`：本次求知 Ticket 和双向互补配对。
+4. `exchange`：24 小时异步互答与后续交流。
+5. `quality`：对方不满意后评估本次回答。
+6. `reputation`：记录评估结果和匹配资格。
 
 模块边界以 [#31](https://github.com/xiaocheny214/verso/issues/31) 和 [`architecture.md`](architecture.md) 为准。
 

@@ -1,4 +1,4 @@
-"""声望表。只有本模块改分；identity 只调用开户。"""
+"""声望表。只有本模块改分；auth 只调用开户。"""
 
 from __future__ import annotations
 

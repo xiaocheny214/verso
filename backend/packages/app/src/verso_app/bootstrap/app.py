@@ -8,7 +8,13 @@ from verso_common.result import Response
 from verso_framework.config import get_app_settings
 from verso_framework.db import Base, get_engine
 
-from verso_app.web.api import auth_router, exchange_router, match_router, quality_router
+from verso_app.web.api import (
+    auth_router,
+    exchange_router,
+    match_router,
+    portrait_router,
+    quality_router,
+)
 from verso_app.web.handler import register_exception_handlers
 
 
@@ -16,9 +22,10 @@ from verso_app.web.handler import register_exception_handlers
 async def lifespan(_app: FastAPI):
     settings = get_app_settings()
     if settings.create_tables:
+        from verso_app.server.auth import models as auth_models  # noqa: F401
         from verso_app.server.exchange import models as exchange_models  # noqa: F401
-        from verso_app.server.identity import models as identity_models  # noqa: F401
         from verso_app.server.match import models as match_models  # noqa: F401
+        from verso_app.server.portrait import models as portrait_models  # noqa: F401
         from verso_app.server.quality import models as quality_models  # noqa: F401
         from verso_app.server.reputation import (
             models as reputation_models,  # noqa: F401
@@ -41,6 +48,7 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
     app.include_router(auth_router)
+    app.include_router(portrait_router)
     app.include_router(match_router)
     app.include_router(exchange_router)
     app.include_router(quality_router)

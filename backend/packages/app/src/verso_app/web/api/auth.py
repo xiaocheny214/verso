@@ -2,28 +2,31 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field
-from verso_common.enums import StrengthTag
 from verso_common.models import UserCard
 from verso_common.result import Response as ApiResponse
 from verso_framework.config import get_app_settings
 
-from verso_app.server.identity.models import User
-from verso_app.server.identity.service import IdentityService
-from verso_app.web.middleware.auth import get_current_user, get_identity_service
+from verso_app.server.auth.models import User
+from verso_app.server.auth.service import AuthService
+from verso_app.server.portrait.service import PortraitService
+from verso_app.web.middleware.auth import (
+    get_auth_service,
+    get_current_user,
+    get_portrait_service,
+)
 
-router = APIRouter(tags=["identity"])
+logger = logging.getLogger("verso.web.auth")
 
-IdentityDep = Annotated[IdentityService, Depends(get_identity_service)]
+router = APIRouter(tags=["auth"])
+
+AuthDep = Annotated[AuthService, Depends(get_auth_service)]
+PortraitDep = Annotated[PortraitService, Depends(get_portrait_service)]
 UserDep = Annotated[User, Depends(get_current_user)]
-
-
-class SelfReportBody(BaseModel):
-    tags: list[StrengthTag] = Field(min_length=1, max_length=3)
 
 
 def _set_intent_cookie(response: JSONResponse, nonce: str) -> None:
@@ -51,8 +54,8 @@ def _set_session_cookie(response: RedirectResponse, session_id: str) -> None:
 
 
 @router.get("/auth/zhihu/url")
-def zhihu_login_url(identity: IdentityDep) -> JSONResponse:
-    started = identity.start_login()
+def zhihu_login_url(auth: AuthDep) -> JSONResponse:
+    started = auth.start_login()
     payload = ApiResponse.success({"authorize_url": started.authorize_url}).model_dump(
         mode="json"
     )
@@ -63,14 +66,19 @@ def zhihu_login_url(identity: IdentityDep) -> JSONResponse:
 
 @router.get("/auth/zhihu/callback")
 def zhihu_callback(
-    identity: IdentityDep,
+    auth: AuthDep,
+    portrait: PortraitDep,
     request: Request,
     authorization_code: str | None = None,
     code: str | None = None,
 ) -> RedirectResponse:
     auth_code = authorization_code or code or ""
     nonce = request.cookies.get("verso_oauth_intent") or ""
-    result = identity.complete_login(code=auth_code, nonce=nonce)
+    result = auth.complete_login(code=auth_code, nonce=nonce)
+    try:
+        portrait.sync(result.user.id)
+    except Exception:
+        logger.exception("画像同步失败 user_id=%s", result.user.id)
     target = get_app_settings().public_origin.rstrip("/") + "/"
     response = RedirectResponse(url=target, status_code=302)
     _set_session_cookie(response, result.session_id)
@@ -79,29 +87,14 @@ def zhihu_callback(
 
 
 @router.post("/auth/logout")
-def logout(request: Request, identity: IdentityDep) -> JSONResponse:
+def logout(request: Request, auth: AuthDep) -> JSONResponse:
     settings = get_app_settings()
-    identity.logout(request.cookies.get(settings.session_cookie) or "")
+    auth.logout(request.cookies.get(settings.session_cookie) or "")
     response = JSONResponse(ApiResponse.success().model_dump(mode="json"))
     response.delete_cookie(settings.session_cookie, path="/")
     return response
 
 
 @router.get("/me")
-def me(identity: IdentityDep, user: UserDep) -> ApiResponse[UserCard]:
-    return ApiResponse.success(identity.get_card(user))
-
-
-@router.post("/me/portrait/sync")
-def sync_portrait(identity: IdentityDep, user: UserDep) -> ApiResponse[UserCard]:
-    identity.sync_portrait(user.id)
-    return ApiResponse.success(identity.get_card(user))
-
-
-@router.post("/me/portrait/self-report")
-def self_report(
-    body: SelfReportBody,
-    identity: IdentityDep,
-    user: UserDep,
-) -> ApiResponse[UserCard]:
-    return ApiResponse.success(identity.self_report(user, body.tags))
+def me(portrait: PortraitDep, user: UserDep) -> ApiResponse[UserCard]:
+    return ApiResponse.success(portrait.card_for(user))
