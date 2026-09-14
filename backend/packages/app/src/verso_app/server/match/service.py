@@ -7,16 +7,16 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
-from verso_common.constants import MATCH_WAIT_HOURS, PAIR_WINDOW_HOURS
-from verso_common.enums import BizCode, MatchConditionStatus, StrengthTag
-from verso_common.exceptions import BizException
-from verso_common.models import MatchConditionView, MatchPeerView
 
 from verso_app.server.auth.models import User
 from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.reputation.service import ReputationService
+from verso_common.constants import MATCH_WAIT_HOURS, PAIR_WINDOW_HOURS
+from verso_common.enums import BizCode, MatchConditionStatus, StrengthTag
+from verso_common.exceptions import BizException
+from verso_common.models import MatchConditionView, MatchPeerView
 
 
 class MatchService:
@@ -207,9 +207,7 @@ class MatchService:
         )
 
     def _strengths(self, user_id: uuid.UUID) -> set[str]:
-        rows = self._session.scalars(
-            select(Portrait).where(Portrait.user_id == user_id)
-        ).all()
+        rows = self._session.scalars(select(Portrait).where(Portrait.user_id == user_id)).all()
         tags: set[str] = set()
         for row in rows:
             for raw in row.strengths or []:

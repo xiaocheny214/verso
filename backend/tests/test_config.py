@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+
 from verso_framework.config.database import DatabaseSettings
 from verso_framework.config.redis import RedisSettings
 

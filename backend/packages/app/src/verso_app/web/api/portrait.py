@@ -6,13 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from verso_common.enums import StrengthTag
-from verso_common.models import UserCard
-from verso_common.result import Response as ApiResponse
 
 from verso_app.server.auth.models import User
 from verso_app.server.portrait.service import PortraitService
 from verso_app.web.middleware.auth import get_current_user, get_portrait_service
+from verso_common.enums import StrengthTag
+from verso_common.models import UserCard
+from verso_common.result import Response as ApiResponse
 
 router = APIRouter(tags=["portrait"])
 

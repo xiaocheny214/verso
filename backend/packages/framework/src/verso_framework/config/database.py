@@ -33,9 +33,7 @@ class DatabaseSettings(BaseSettings):
     @classmethod
     def _check_password_not_trivial(cls, v: str) -> str:
         if len(v) < 8:
-            raise ValueError(
-                "POSTGRES_PASSWORD 长度不足 8 字符。请使用强密码以保障数据库安全。"
-            )
+            raise ValueError("POSTGRES_PASSWORD 长度不足 8 字符。请使用强密码以保障数据库安全。")
         return v
 
     @property

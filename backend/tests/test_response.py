@@ -4,9 +4,9 @@ from verso_common.enums import (
     BizCode,
     Eligibility,
     ExchangeStatus,
+    MatchConditionStatus,
     PortraitHorizon,
     ReviewVerdict,
-    MatchConditionStatus,
     StrengthTag,
 )
 from verso_common.result import ListResponse, Response

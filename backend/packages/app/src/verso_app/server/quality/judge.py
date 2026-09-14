@@ -5,6 +5,8 @@ from __future__ import annotations
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
+
+from verso_app.server.quality.ports import Judgement
 from verso_common.constants import (
     QUALITY_GOOD_ABOVE,
     QUALITY_POOR_BELOW,
@@ -14,8 +16,6 @@ from verso_common.constants import (
 from verso_common.enums import ReviewVerdict
 from verso_framework.config.app import AppSettings
 from verso_framework.providers.llm import build_chat_model
-
-from verso_app.server.quality.ports import Judgement
 
 SYSTEM_PROMPT = """你是 Verso 的回答质量评审员，只做一件事：围绕学习者这次想学的问题，评估对方留下的回答有没有对准这个主题、有没有实质内容。
 
@@ -64,12 +64,10 @@ class LlmAnswerJudge:
             raw = self._structured.invoke(
                 [
                     SystemMessage(content=SYSTEM_PROMPT),
-                    HumanMessage(
-                        content=USER_PROMPT.format(want_text=want_text, answer=answer)
-                    ),
+                    HumanMessage(content=USER_PROMPT.format(want_text=want_text, answer=answer)),
                 ]
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return Judgement(verdict=ReviewVerdict.UNCLEAR)
         scored = raw if isinstance(raw, AnswerScore) else AnswerScore.model_validate(raw)
         return Judgement(

@@ -4,9 +4,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from verso_common.result import Response
-from verso_framework.config import get_app_settings
-from verso_framework.db import Base, get_engine
 
 from verso_app.web.api import (
     auth_router,
@@ -17,6 +14,9 @@ from verso_app.web.api import (
     reputation_router,
 )
 from verso_app.web.handler import register_exception_handlers
+from verso_common.result import Response
+from verso_framework.config import get_app_settings
+from verso_framework.db import Base, get_engine
 
 
 @asynccontextmanager

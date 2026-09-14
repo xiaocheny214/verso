@@ -22,9 +22,7 @@ class Exchange(Base):
     user_b_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=ExchangeStatus.OPEN
-    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=ExchangeStatus.OPEN)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -9,6 +9,11 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from verso_app.server.auth.models import User
+from verso_app.server.portrait.models import Portrait
+from verso_app.server.portrait.ports import GrantReader
+from verso_app.server.portrait.tagger import tags_from_text
 from verso_common.constants import PORTRAIT_RECENT_DAYS
 from verso_common.enums import BizCode, PortraitHorizon, PortraitSource, StrengthTag
 from verso_common.exceptions import BizException
@@ -19,11 +24,6 @@ from verso_framework.providers.zhihu import (
     ZhihuContent,
     ZhihuFollowee,
 )
-
-from verso_app.server.auth.models import User
-from verso_app.server.portrait.models import Portrait
-from verso_app.server.portrait.ports import GrantReader
-from verso_app.server.portrait.tagger import tags_from_text
 
 logger = logging.getLogger("verso.portrait")
 
@@ -40,9 +40,7 @@ class PortraitService:
         self._zhihu = zhihu
 
     def card_for(self, user: User) -> UserCard:
-        portraits = self._session.scalars(
-            select(Portrait).where(Portrait.user_id == user.id)
-        ).all()
+        portraits = self._session.scalars(select(Portrait).where(Portrait.user_id == user.id)).all()
         views = [_to_view(row) for row in portraits]
         views.sort(key=lambda item: item.horizon.value)
         return UserCard(
@@ -98,11 +96,7 @@ class PortraitService:
 
     def self_report(self, user: User, tags: list[StrengthTag]) -> UserCard:
         stable = self._session.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
-        if (
-            stable is not None
-            and stable.strengths
-            and stable.source in _OBSERVED_SOURCES
-        ):
+        if stable is not None and stable.strengths and stable.source in _OBSERVED_SOURCES:
             raise BizException("已有知乎画像，不能自报覆盖", code=BizCode.CONFLICT)
         now = datetime.now(UTC)
         unique = list(dict.fromkeys(tags))
@@ -178,9 +172,7 @@ def _to_view(row: Portrait) -> PortraitView:
     return PortraitView(horizon=PortraitHorizon(row.kind), strengths=strengths)
 
 
-_OBSERVED_SOURCES = frozenset(
-    {PortraitSource.CONTENTS.value, PortraitSource.FAVORITES.value}
-)
+_OBSERVED_SOURCES = frozenset({PortraitSource.CONTENTS.value, PortraitSource.FAVORITES.value})
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,8 +223,10 @@ def _from_all(
         if hit:
             from_contents = True
             _extend_unique(tags, hit)
-    return tags, evidence[:5], _portrait_source(
-        from_contents=from_contents, from_favorites=from_favorites
+    return (
+        tags,
+        evidence[:5],
+        _portrait_source(from_contents=from_contents, from_favorites=from_favorites),
     )
 
 
@@ -262,8 +256,10 @@ def _from_recent(
             from_favorites = True
             _extend_unique(tags, hit)
             _push_evidence(evidence, item.title, item.url, "collection")
-    return tags, evidence[:5], _portrait_source(
-        from_contents=from_contents, from_favorites=from_favorites
+    return (
+        tags,
+        evidence[:5],
+        _portrait_source(from_contents=from_contents, from_favorites=from_favorites),
     )
 
 

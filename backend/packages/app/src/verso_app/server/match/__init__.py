@@ -3,4 +3,3 @@
 from verso_app.server.match.service import MatchService
 
 __all__ = ["MatchService"]
-

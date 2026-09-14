@@ -7,6 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
+
 from verso_common.enums import UserStatus
 from verso_framework.db.base import Base
 

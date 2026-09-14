@@ -6,13 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from verso_common.enums import StrengthTag
-from verso_common.models import MatchConditionView
-from verso_common.result import Response as ApiResponse
 
 from verso_app.server.auth.models import User
 from verso_app.server.match.service import MatchService
 from verso_app.web.middleware.auth import get_current_user, get_match_service
+from verso_common.enums import StrengthTag
+from verso_common.models import MatchConditionView
+from verso_common.result import Response as ApiResponse
 
 router = APIRouter(tags=["match"])
 
@@ -31,9 +31,7 @@ def submit_condition(
     match: MatchDep,
     user: UserDep,
 ) -> ApiResponse[MatchConditionView]:
-    return ApiResponse.success(
-        match.submit(user, want_text=body.want_text, want_tag=body.want_tag)
-    )
+    return ApiResponse.success(match.submit(user, want_text=body.want_text, want_tag=body.want_tag))
 
 
 @router.get("/match/conditions/me")

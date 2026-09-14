@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
 from verso_common.enums.biz_code import BizCode
 from verso_common.exceptions import BizException
 from verso_common.result import Response
@@ -38,9 +39,7 @@ def _first_validation_message(errors: object) -> str:
     return "请求参数校验失败"
 
 
-def handle_request_validation_error(
-    _request: Request, exc: RequestValidationError
-) -> JSONResponse:
+def handle_request_validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
     detail = jsonable_encoder(exc.errors())
     return _jsonify(
         Response.fail(

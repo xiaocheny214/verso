@@ -7,14 +7,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
-from verso_common.enums import BizCode, ExchangeStatus, StrengthTag
-from verso_common.exceptions import BizException
-from verso_common.models import ExchangeView, MessageView, PairView
 
 from verso_app.server.auth.models import User
 from verso_app.server.exchange.models import Exchange, Message
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.portrait.models import Portrait
+from verso_common.enums import BizCode, ExchangeStatus, StrengthTag
+from verso_common.exceptions import BizException
+from verso_common.models import ExchangeView, MessageView, PairView
 
 
 def _aware(value: datetime) -> datetime:
@@ -175,9 +175,7 @@ class ExchangeService:
         )
 
     def _strengths(self, user_id: uuid.UUID) -> list[StrengthTag]:
-        rows = self._session.scalars(
-            select(Portrait).where(Portrait.user_id == user_id)
-        ).all()
+        rows = self._session.scalars(select(Portrait).where(Portrait.user_id == user_id)).all()
         tags: list[StrengthTag] = []
         seen: set[str] = set()
         for row in rows:

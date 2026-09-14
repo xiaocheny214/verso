@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from verso_app.server.auth.models import User
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.match.service import MatchService
@@ -116,7 +117,14 @@ def _user(
 def test_match_conditions_table_has_no_strengths(db: Session) -> None:
     columns = {column["name"] for column in inspect(db.get_bind()).get_columns("match_conditions")}
     assert "strengths" not in columns
-    assert {"want_text", "want_tag", "status", "pair_id", "waiting_until", "pair_closes_at"} <= columns
+    assert {
+        "want_text",
+        "want_tag",
+        "status",
+        "pair_id",
+        "waiting_until",
+        "pair_closes_at",
+    } <= columns
 
 
 def test_complementary_pair_shares_pair_id(db: Session) -> None:

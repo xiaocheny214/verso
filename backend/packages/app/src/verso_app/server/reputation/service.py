@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+
+from verso_app.server.reputation.models import Reputation
 from verso_common.constants import (
     REPUTATION_GOOD_DELTA,
     REPUTATION_INITIAL_SCORE,
@@ -17,8 +19,6 @@ from verso_common.enums import Eligibility
 from verso_common.models import ReputationView
 from verso_framework.config.app import AppSettings
 
-from verso_app.server.reputation.models import Reputation
-
 
 class ReputationService:
     def __init__(self, settings: AppSettings | None = None) -> None:
@@ -26,9 +26,7 @@ class ReputationService:
             settings.reputation_score_max if settings is not None else REPUTATION_SCORE_MAX
         )
         self._initial_score = (
-            settings.reputation_initial_score
-            if settings is not None
-            else REPUTATION_INITIAL_SCORE
+            settings.reputation_initial_score if settings is not None else REPUTATION_INITIAL_SCORE
         )
         self._poor_delta = (
             settings.reputation_poor_delta if settings is not None else REPUTATION_POOR_DELTA
@@ -82,9 +80,7 @@ class ReputationService:
         row = session.get(Reputation, user_id)
         return row.score if row is not None else self._initial_score
 
-    def allows_match(
-        self, session: Session, user_id: uuid.UUID, now: datetime
-    ) -> bool:
+    def allows_match(self, session: Session, user_id: uuid.UUID, now: datetime) -> bool:
         row = session.get(Reputation, user_id)
         if row is None:
             return False

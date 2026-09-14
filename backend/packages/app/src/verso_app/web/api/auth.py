@@ -7,9 +7,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from verso_common.models import UserCard
-from verso_common.result import Response as ApiResponse
-from verso_framework.config import get_app_settings
 
 from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
@@ -19,6 +16,9 @@ from verso_app.web.middleware.auth import (
     get_current_user,
     get_portrait_service,
 )
+from verso_common.models import UserCard
+from verso_common.result import Response as ApiResponse
+from verso_framework.config import get_app_settings
 
 logger = logging.getLogger("verso.web.auth")
 
@@ -56,9 +56,7 @@ def _set_session_cookie(response: RedirectResponse, session_id: str) -> None:
 @router.get("/auth/zhihu/url")
 def zhihu_login_url(auth: AuthDep) -> JSONResponse:
     started = auth.start_login()
-    payload = ApiResponse.success({"authorize_url": started.authorize_url}).model_dump(
-        mode="json"
-    )
+    payload = ApiResponse.success({"authorize_url": started.authorize_url}).model_dump(mode="json")
     response = JSONResponse(payload)
     _set_intent_cookie(response, started.nonce)
     return response

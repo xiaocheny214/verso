@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from verso_app.server.auth.models import User
 from verso_app.server.exchange.models import Exchange, Message
 from verso_app.server.exchange.service import ExchangeService
@@ -151,7 +152,7 @@ def test_close_stops_new_messages(db: Session) -> None:
 
 
 def test_window_expiry_closes_pair(db: Session) -> None:
-    alice, bob, pair_id = _pair(db)
+    alice, _bob, pair_id = _pair(db)
     row = db.get(Exchange, pair_id)
     assert row is not None
     row.closes_at = datetime.now(UTC) - timedelta(seconds=1)
