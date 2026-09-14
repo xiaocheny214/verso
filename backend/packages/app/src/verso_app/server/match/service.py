@@ -1,4 +1,4 @@
-"""这次想学什么 + 双向互补配对。擅长只读 portraits。"""
+"""这次想学什么 + 双向互补配对。擅长只读 portrait。"""
 
 from __future__ import annotations
 
@@ -7,11 +7,6 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
-
-from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
-from verso_app.server.identity.models import Portrait, User
-from verso_app.server.match.models import MatchCondition
-from verso_app.server.reputation.models import Reputation
 from verso_common.constants import (
     MATCH_WAIT_HOURS,
     PAIR_WINDOW_HOURS,
@@ -25,6 +20,12 @@ from verso_common.enums import (
 )
 from verso_common.exceptions import BizException
 from verso_common.models import MatchConditionView, MatchPeerView
+
+from verso_app.server.auth.models import User
+from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
+from verso_app.server.match.models import MatchCondition
+from verso_app.server.portrait.models import Portrait
+from verso_app.server.reputation.models import Reputation
 
 
 class MatchService:

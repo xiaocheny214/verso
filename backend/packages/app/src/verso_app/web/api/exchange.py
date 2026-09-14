@@ -8,9 +8,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from verso_common.models import ExchangeView, MessageView, PairView
-from verso_common.result import ListResponse, Response as ApiResponse
+from verso_common.result import ListResponse
+from verso_common.result import Response as ApiResponse
 
-from verso_app.server.identity.models import User
+from verso_app.server.auth.models import User
 from verso_app.server.exchange.service import ExchangeService
 from verso_app.web.middleware.auth import get_current_user, get_exchange_service
 

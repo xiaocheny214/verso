@@ -1,6 +1,6 @@
 # Verso 后端架构
 
-产品规格以 [`product-proposal.md`](product-proposal.md) 和 [#30](https://github.com/xiaocheny214/verso/issues/30) 为准。领域划分以 [#31](https://github.com/xiaocheny214/verso/issues/31) 为准。
+产品规格以 [`product-proposal.md`](product-proposal.md) 和 [#30](https://github.com/xiaocheny214/verso/issues/30) 为准。领域划分以 [#31](https://github.com/xiaocheny214/verso/issues/31) 和 [`modules.md`](modules.md) 为准。
 
 本期主路径只有一条：
 
@@ -50,7 +50,8 @@ verso_common
 
 | 模块 | 负责 | 不负责 |
 |---|---|---|
-| `identity` | OAuth、站内用户、授权数据、擅长画像 | 本次想学什么、决定匹配对象 |
+| `auth` | OAuth、站内用户、授权数据、初始化声望 | 抽取擅长、决定匹配对象 |
+| `portrait` | 从授权数据源生成擅长画像 | 登录、存 token、决定匹配对象 |
 | `match` | 求知 Ticket、双向互补条件、配对结果 | 对话消息、回答质量、长期分数 |
 | `exchange` | 一次配对关系、24 小时异步消息、结束状态 | 重新计算匹配、修改画像 |
 | `quality` | 人先触发的回答评估、评估证据和裁决 | 自行监听每条消息、直接冻结资格 |
@@ -58,6 +59,8 @@ verso_common
 
 `server` 内模块可以通过明确的服务接口调用，但每份状态只能有一个 owner：
 
+- 用户、session 和授权 token 只由 `auth` 写。
+- 画像只由 `portrait` 写。
 - Ticket 和配对状态只由 `match` 写。
 - Exchange 和消息只由 `exchange` 写。
 - Review 只由 `quality` 写。
@@ -67,7 +70,8 @@ verso_common
 ## 四、主路径
 
 ```text
-web ── OAuth ──► identity ──► 用户 + 擅长画像
+web ── OAuth ──► auth ──► 用户
+web ── 授权数据 ──► portrait ──► 擅长画像
 web ── 本次想学 ──► match.Ticket
 match ── 双向 covers ──► Match ──► exchange.Exchange
 web ── 异步留言 ──► exchange.Message
@@ -76,7 +80,7 @@ web ── 不满意 ──► quality.Review ──► reputation
 
 关键约束：
 
-- `identity` 的擅长画像和 `match` 的本次需求必须分开存储。
+- `auth` 只认账号和授权；`portrait` 的擅长画像和 `match` 的本次需求必须分开存储。
 - `match(A, B)` 要求 `B.offer` 覆盖 `A.want`，同时 `A.offer` 覆盖 `B.want`。
 - 用户提交未结束 Ticket 即主动进入匹配池，不通过实时在线状态找人。
 - 配上后立即建立 Exchange；双方可以在不同时间留言。
@@ -84,11 +88,16 @@ web ── 不满意 ──► quality.Review ──► reputation
 
 ## 五、身份与授权
 
-身份契约由 `identity` 维护：
+身份契约由 `auth` 维护：
 
 - OAuth intent、用户 access token 和站内 session 存 Redis，并设置 TTL。
 - Access Secret、App Key、用户 token 不进入响应、日志、前端或仓库。
 - Postgres 用户主键是站内稳定 ID，不能把展示名当主键。
+- 登录成功时初始化 reputation 默认分；不写画像表。
+
+画像契约由 `portrait` 维护：
+
+- 读取 `auth` 保存的授权数据源（创作 / 关注 / 收藏），抽取 `stable` 与 `recent_7d`。
 - 画像标签必须保留来源证据，并区分系统提取与用户自报。
 - 外部数据读取失败不能伪装成成功画像；允许部分来源失败和显式重试。
 
@@ -153,7 +162,8 @@ Redis 保存短期凭证、session、OAuth intent、用户授权 token、幂等�
 
 FastAPI 生成的 OpenAPI 是唯一接口契约。接口名称随实现 Issue 冻结，当前按资源分组：
 
-- `auth / me / portrait` → `identity`
+- `auth / me` → `auth`
+- `portrait` → `portrait`
 - `tickets / matches` → `match`
 - `exchanges / messages` → `exchange`
 - `reviews` → `quality`

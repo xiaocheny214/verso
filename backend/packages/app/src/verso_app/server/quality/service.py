@@ -10,8 +10,8 @@ from verso_common.enums import BizCode, ReviewVerdict
 from verso_common.exceptions import BizException
 from verso_common.models import ExchangeView, ReviewView
 
+from verso_app.server.auth.models import User
 from verso_app.server.exchange.service import ExchangeService
-from verso_app.server.identity.models import User
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.quality.judge import UnclearJudge
 from verso_app.server.quality.models import Review

@@ -7,13 +7,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
-
-from verso_app.server.exchange.models import Exchange, Message
-from verso_app.server.identity.models import Portrait, User
-from verso_app.server.match.models import MatchCondition
 from verso_common.enums import BizCode, ExchangeStatus, StrengthTag
 from verso_common.exceptions import BizException
 from verso_common.models import ExchangeView, MessageView, PairView
+
+from verso_app.server.auth.models import User
+from verso_app.server.exchange.models import Exchange, Message
+from verso_app.server.match.models import MatchCondition
+from verso_app.server.portrait.models import Portrait
 
 
 def _aware(value: datetime) -> datetime:

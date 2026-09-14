@@ -1,4 +1,4 @@
-"""identity：擅长闭集、画像来源与时间窗。"""
+"""portrait：擅长闭集、画像来源与时间窗。"""
 
 from enum import StrEnum
 
@@ -33,9 +33,3 @@ class PortraitHorizon(StrEnum):
 
     STABLE = "stable"
     RECENT_7D = "recent_7d"
-
-
-class UserStatus(StrEnum):
-    ACTIVE = "active"
-    BANNED = "banned"
-    DELETED = "deleted"

@@ -7,11 +7,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
-
+from verso_app.server.auth.models import User
 from verso_app.server.exchange.models import Exchange, Message
 from verso_app.server.exchange.service import ExchangeService
-from verso_app.server.identity.models import Portrait, User
 from verso_app.server.match.service import MatchService
+from verso_app.server.portrait.models import Portrait
 from verso_app.server.reputation.models import Reputation
 from verso_app.web.api.exchange import router as exchange_router
 from verso_app.web.handler import register_exception_handlers
