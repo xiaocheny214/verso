@@ -1,7 +1,3 @@
-export interface ExchangeMessage {
-  id: string;
-  exchange_id: string;
-  sender_id: string;
-  text: string;
-  created_at: string;
-}
+import type { components } from "@/lib/api/schema";
+
+export type ExchangeMessage = components["schemas"]["MessageView"];
