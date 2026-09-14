@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
-import { demoUser } from "@/lib/demo-data";
+import { demoUser } from "@/model/portrait";
 
 const sourceLabels = {
   contents: "知乎创作",
