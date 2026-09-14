@@ -2,17 +2,27 @@
 
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
+import { ArrowRight, RefreshCw, AlertCircle, XCircle } from "lucide-react";
 
 import { AppFrame } from "@/components/app-frame";
 import { MatchExplanation } from "@/components/match-explanation";
 import { demoMatch } from "@/model/match";
+import type { StrengthTag } from "@/model/portrait";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "cn";
 
 type MatchDemoState = "compose" | "waiting" | "matched" | "cancelled" | "error";
 
-const stateLabels: Array<{ value: MatchDemoState; label: string }> = [
-  { value: "compose", label: "填写" },
-  { value: "waiting", label: "等待" },
-  { value: "matched", label: "已匹配" },
+const stateLabels: Array<{
+  value: MatchDemoState;
+  label: string;
+}> = [
+  { value: "compose", label: "填写需求" },
+  { value: "waiting", label: "匹配中" },
+  { value: "matched", label: "匹配成功" },
   { value: "cancelled", label: "已取消" },
   { value: "error", label: "异常" },
 ];
@@ -30,57 +40,6 @@ function getMatchRouteState(): MatchDemoState {
   return isMatchDemoState(requested) ? requested : "compose";
 }
 
-const stateCopy: Record<
-  MatchDemoState,
-  { eyebrow: string; title: string; description: string }
-> = {
-  compose: {
-    eyebrow: "一次问题，只参与一次匹配",
-    title: "这一次，你想补上什么？",
-    description:
-      "写具体问题比选择兴趣标签更重要。它决定对方要为你留下什么答案。",
-  },
-  waiting: {
-    eyebrow: "匹配条件已进入队列",
-    title: "正在找能与你互补的人",
-    description:
-      "你可以先离开。只有两条 covers 关系同时成立时，我们才会打开交流。",
-  },
-  matched: {
-    eyebrow: "双向互补成立",
-    title: "两张背叶已经合上",
-    description: "不是因为你们相似，而是因为双方都恰好能回答对方的问题。",
-  },
-  cancelled: {
-    eyebrow: "本次 Ticket 已退出队列",
-    title: "这次匹配已取消",
-    description: "问题没有继续参与匹配，长期画像和知乎授权不会受到影响。",
-  },
-  error: {
-    eyebrow: "提交没有完成",
-    title: "问题还安全地留在这里",
-    description: "网络暂时没有响应；你的输入没有丢失，也没有产生重复 Ticket。",
-  },
-};
-
-const panelCopy = {
-  waiting: {
-    symbol: "···",
-    status: "最长等待 24 小时",
-    title: "",
-  },
-  cancelled: {
-    symbol: "×",
-    status: "没有产生交流关系",
-    title: "想法变了，也可以随时重新开始。",
-  },
-  error: {
-    symbol: "!",
-    status: "可安全重试",
-    title: "检查网络后再次提交；我们不会重复排队。",
-  },
-} as const;
-
 export default function MatchPage() {
   const routeView = useSyncExternalStore<MatchDemoState>(
     subscribeToStaticRoute,
@@ -90,132 +49,213 @@ export default function MatchPage() {
   const [selectedView, setView] = useState<MatchDemoState | null>(null);
   const view = selectedView ?? routeView;
   const [wantText, setWantText] = useState(demoMatch.want_text);
-  const copy = stateCopy[view];
-  const panel =
-    view === "waiting" || view === "cancelled" || view === "error"
-      ? panelCopy[view]
-      : null;
+  const [wantTag, setWantTag] = useState(demoMatch.want_tag);
 
   return (
-    <AppFrame active="匹配">
-      <main className="match-layout">
-        <header className="match-heading">
-          <p className="context-line">{copy.eyebrow}</p>
-          <h1>{copy.title}</h1>
-          <p>{copy.description}</p>
-        </header>
-
-        <div className="demo-state-rail" aria-label="演示匹配状态">
-          <span>状态预览</span>
-          {stateLabels.map((state) => (
-            <button
-              key={state.value}
-              type="button"
-              aria-pressed={view === state.value}
-              onClick={() => setView(state.value)}
-            >
-              {state.label}
-            </button>
-          ))}
+    <AppFrame>
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Status switcher for preview */}
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <span className="text-xs font-semibold text-slate-500">
+            状态切换预览:
+          </span>
+          <div className="flex items-center gap-1.5 text-xs">
+            {stateLabels.map((state) => (
+              <Button
+                key={state.value}
+                type="button"
+                variant={view === state.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setView(state.value)}
+                className="h-7 text-xs px-2.5"
+              >
+                {state.label}
+              </Button>
+            ))}
+          </div>
         </div>
 
+        {/* 1. COMPOSE */}
         {view === "compose" && (
-          <section className="ticket-composer" aria-labelledby="ticket-title">
-            <div className="ticket-number">本次 Ticket</div>
-            <div className="ticket-main">
-              <label id="ticket-title" htmlFor="want-text">
-                我想了解
-              </label>
-              <textarea
-                id="want-text"
-                value={wantText}
-                onChange={(event) => setWantText(event.target.value)}
-                maxLength={200}
-              />
-              <div className="ticket-meta">
-                <label htmlFor="want-tag">归到能力方向</label>
-                <select id="want-tag" defaultValue="健身">
-                  <option>健身</option>
-                  <option>训练</option>
-                  <option>互联网</option>
-                  <option>编程</option>
-                  <option>写作</option>
-                </select>
-                <span>{wantText.length}/200</span>
+          <Card className="bg-white border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold text-slate-900">
+                发起单次互补需求
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              <div>
+                <label
+                  htmlFor="want-text"
+                  className="block text-xs font-bold text-slate-700 mb-1"
+                >
+                  具体想了解的问题
+                </label>
+                <Textarea
+                  id="want-text"
+                  value={wantText}
+                  onChange={(e) => setWantText(e.target.value)}
+                  maxLength={200}
+                  rows={4}
+                  placeholder="例如：没有器械，怎样制定一套能坚持三个月的力量训练计划？"
+                  className="resize-none"
+                />
+                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <span>建议交代具体背景与目标</span>
+                  <span>{wantText.length} / 200 字</span>
+                </div>
               </div>
-            </div>
-            <button
-              className="primary-action button-reset"
-              type="button"
-              disabled={!wantText.trim()}
-              onClick={() => setView("waiting")}
-            >
-              提交本次问题
-            </button>
-          </section>
-        )}
 
-        {view === "matched" && (
-          <>
-            <MatchExplanation match={demoMatch} />
-            <div className="match-actions">
-              <button
-                className="text-action button-reset"
-                type="button"
-                onClick={() => setView("compose")}
-              >
-                返回修改问题
-              </button>
-              <Link className="primary-action" href="/exchange">
-                进入 24 小时互答
-              </Link>
-            </div>
-          </>
-        )}
+              <div className="grid sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label
+                    htmlFor="want-tag"
+                    className="block text-xs font-bold text-slate-700 mb-1"
+                  >
+                    期望对方能力方向
+                  </label>
+                  <select
+                    id="want-tag"
+                    value={wantTag}
+                    onChange={(e) => setWantTag(e.target.value as StrengthTag)}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-800 bg-white"
+                  >
+                    <option value="健身">健身 & 训练计划</option>
+                    <option value="训练">力量与体态指导</option>
+                    <option value="互联网">互联网 & 产品思维</option>
+                    <option value="编程">编程与工程架构</option>
+                    <option value="写作">内容表达与写作</option>
+                  </select>
+                </div>
 
-        {panel && (
-          <section
-            className={`state-panel state-panel-${view}`}
-            role={view === "error" ? "alert" : "status"}
-          >
-            <div className="state-symbol" aria-hidden="true">
-              {panel.symbol}
-            </div>
-            <div>
-              <span>{panel.status}</span>
-              <h2>{view === "waiting" ? wantText : panel.title}</h2>
-            </div>
-            <div className="state-actions">
-              {view === "waiting" ? (
-                <>
-                  <button
-                    className="primary-action button-reset"
-                    type="button"
-                    onClick={() => setView("matched")}
-                  >
-                    演示找到互补对象
-                  </button>
-                  <button
-                    className="text-action button-reset"
-                    type="button"
-                    onClick={() => setView("cancelled")}
-                  >
-                    取消这次匹配
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="primary-action button-reset"
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs text-slate-500 flex flex-col justify-center">
+                  <span className="font-semibold text-slate-700">
+                    你的提供能力：互联网 · 编程
+                  </span>
+                  <span className="text-slate-400 text-[11px] mt-0.5">
+                    来自画像，系统将自动寻找互补伙伴
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
+                <Button
                   type="button"
+                  disabled={!wantText.trim()}
+                  onClick={() => setView("waiting")}
+                >
+                  提交问题进入队列
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 2. MATCHED */}
+        {view === "matched" && (
+          <Card className="bg-white border-slate-200">
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-bold text-slate-900">
+                双向互补匹配成功
+              </CardTitle>
+              <Badge variant="secondary" className="text-emerald-700 bg-emerald-50 border-emerald-200">
+                对局就绪
+              </Badge>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <MatchExplanation match={demoMatch} />
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setView("compose")}
                 >
-                  {view === "cancelled" ? "重新填写问题" : "返回并重试"}
-                </button>
-              )}
-            </div>
-          </section>
+                  修改问题
+                </Button>
+                <Link
+                  href="/exchange"
+                  className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
+                >
+                  <span>进入翻开的叶（对局互答）</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         )}
-      </main>
+
+        {/* 3. WAITING */}
+        {view === "waiting" && (
+          <Card className="bg-white border-slate-200">
+            <CardContent className="p-8 text-center space-y-4">
+              <RefreshCw className="h-8 w-8 animate-spin text-indigo-600 mx-auto" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  “{wantText}”
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  正在全网创作者画像中寻找互补伙伴。双方均满足条件时开启对局。
+                </p>
+              </div>
+              <div className="flex justify-center gap-2 pt-2">
+                <Button size="sm" onClick={() => setView("matched")}>
+                  模拟匹配成功
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setView("cancelled")}
+                >
+                  取消匹配
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 4. CANCELLED */}
+        {view === "cancelled" && (
+          <Card className="bg-white border-slate-200">
+            <CardContent className="p-8 text-center space-y-4">
+              <XCircle className="h-8 w-8 text-slate-400 mx-auto" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  匹配已取消
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  需求已撤回，长期画像不受影响。
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setView("compose")}>
+                重新填写
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 5. ERROR */}
+        {view === "error" && (
+          <Card className="bg-white border-rose-200">
+            <CardContent className="p-8 text-center space-y-4">
+              <AlertCircle className="h-8 w-8 text-rose-500 mx-auto" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  网络连接暂时异常
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  草稿仍在本地，未发生重复提交。
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setView("compose")}>
+                重试
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </AppFrame>
   );
 }
