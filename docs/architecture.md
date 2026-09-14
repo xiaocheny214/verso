@@ -14,7 +14,7 @@
 
 ```text
 verso/
-├── frontend/                 # Next.js 前端
+├── frontend/                 # Next.js；镜像构建成静态文件
 ├── backend/                  # uv workspace
 │   ├── packages/
 │   │   ├── common/
@@ -23,7 +23,8 @@ verso/
 │   ├── tests/
 │   └── pyproject.toml
 ├── docs/
-└── docker-compose.yml        # api / worker / postgres / redis
+├── deploy/nginx/             # 宿主机 Nginx 反代样例
+└── docker-compose.yml        # backend / postgres / redis；frontend 写出到 /var/www/verso-frontend
 ```
 
 技术栈：FastAPI、PostgreSQL、Redis、Docker Compose。站内身份使用 HTTP-only Cookie Session；知乎 OAuth 负责认证与授权数据访问，知乎 token 只存服务端。
