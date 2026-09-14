@@ -1,0 +1,38 @@
+min_version: 2.0.0
+
+pre-commit:
+  parallel: true
+  commands:
+    frontend-lint:
+      root: frontend/
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+      run: pnpm exec oxlint {staged_files}
+    frontend-format:
+      root: frontend/
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,json,css}"
+      run: pnpm exec oxfmt --check {staged_files}
+    backend-lint:
+      root: backend/
+      glob: "*.py"
+      run: uv run ruff check --force-exclude {staged_files}
+    backend-format:
+      root: backend/
+      glob: "*.py"
+      run: uv run ruff format --check --force-exclude {staged_files}
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm --dir frontend exec commitlint --config ../commitlint.config.cjs --edit {1}
+
+pre-push:
+  commands:
+    frontend-typecheck:
+      root: frontend/
+      run: pnpm typecheck
+    backend-lint:
+      root: backend/
+      run: uv run ruff check .
+    backend-format:
+      root: backend/
+      run: uv run ruff format --check .
