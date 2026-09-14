@@ -12,6 +12,17 @@ uv run uvicorn verso_app.bootstrap.app:app --reload
 uv run python -m verso_app.bootstrap.worker
 ```
 
+代码质量检查：
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run ruff format .
+uv run pytest
+```
+
+提交前 Lefthook 会检查暂存的 Python 文件；推送前会执行后端全量 lint 和格式检查。
+
 也可以 `docker compose up -d --build` 起后端容器；前端静态文件写到 `/var/www/verso-frontend`。本地默认：Postgres `localhost:5432`（库/用户 `verso`，密码 `verso_dev`），Redis `localhost:6379/0`。
 
 HTTP 统一返回 `{code, message, data}`，HTTP 状态码恒 200，业务对错看 `code`。领域错误抛 `BizException`。知乎回调是浏览器跳转，使用 302。
