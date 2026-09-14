@@ -16,7 +16,16 @@ The MVP flow is **Zhihu OAuth → strengths portrait → one-time learning ticke
 Status: product spec is [`docs/product-proposal.md`](docs/product-proposal.md) ([#30](https://github.com/xiaocheny214/verso/issues/30)). Backend boundaries are [`docs/architecture.md`](docs/architecture.md) ([#31](https://github.com/xiaocheny214/verso/issues/31)). How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ```text
+frontend/    # Next.js；镜像写出静态文件到 /var/www/verso-frontend
 backend/     # uv workspace: common → framework → app
+deploy/      # 宿主机 Nginx 样例
 ```
 
-Local API: [`backend/README.md`](backend/README.md). Frontend 由前端负责人另开提案与 PR。
+本地 API：[`backend/README.md`](backend/README.md)。
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+前端容器把静态文件写到 `/var/www/verso-frontend` 后退出。宿主机 Nginx 用 [`deploy/nginx/verso.host.conf`](deploy/nginx/verso.host.conf)：`root` 指向该目录，API 反代到 `127.0.0.1:8000`。数据在 `./data/postgres` 与 `./data/redis`。
