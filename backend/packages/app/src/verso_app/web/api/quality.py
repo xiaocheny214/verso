@@ -7,12 +7,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from verso_common.models import ReviewView
-from verso_common.result import Response as ApiResponse
 
 from verso_app.server.auth.models import User
 from verso_app.server.quality.service import QualityService
 from verso_app.web.middleware.auth import get_current_user, get_quality_service
+from verso_common.models import ReviewView
+from verso_common.result import Response as ApiResponse
 
 router = APIRouter(tags=["quality"])
 

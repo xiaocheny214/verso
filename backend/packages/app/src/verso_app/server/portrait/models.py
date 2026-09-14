@@ -9,6 +9,7 @@ from sqlalchemy import DateTime, ForeignKey, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
+
 from verso_common.enums import PortraitSource
 from verso_framework.db.base import Base
 

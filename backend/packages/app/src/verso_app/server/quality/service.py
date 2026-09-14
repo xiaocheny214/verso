@@ -6,9 +6,6 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from verso_common.enums import BizCode, ReviewVerdict
-from verso_common.exceptions import BizException
-from verso_common.models import ExchangeView, ReviewView
 
 from verso_app.server.auth.models import User
 from verso_app.server.exchange.service import ExchangeService
@@ -17,6 +14,9 @@ from verso_app.server.quality.judge import UnclearJudge
 from verso_app.server.quality.models import Review
 from verso_app.server.quality.ports import AnswerJudge
 from verso_app.server.reputation.service import ReputationService
+from verso_common.enums import BizCode, ReviewVerdict
+from verso_common.exceptions import BizException
+from verso_common.models import ExchangeView, ReviewView
 
 
 class QualityService:
@@ -83,9 +83,7 @@ class QualityService:
         )
         return row.want_text if row is not None else ""
 
-    def _answer_text(
-        self, user: User, exchange_id: uuid.UUID, reviewee_id: uuid.UUID
-    ) -> str:
+    def _answer_text(self, user: User, exchange_id: uuid.UUID, reviewee_id: uuid.UUID) -> str:
         peer = str(reviewee_id)
         parts = [
             item.text

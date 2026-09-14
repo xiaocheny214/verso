@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore

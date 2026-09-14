@@ -5,6 +5,7 @@ from fakes import FakeOAuth, FakeRedis, FakeZhihu
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from verso_app.server.auth.models import User  # noqa: F401
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
@@ -161,9 +162,7 @@ def test_contents_failure_still_uses_favorites(db: Session, settings: AppSetting
 
     now = int(datetime.now(UTC).timestamp())
     redis = FakeRedis()
-    zhihu = ContentsDown(
-        collections=[ZhihuCollection("Python 开发笔记", "", "https://x/fav", now)]
-    )
+    zhihu = ContentsDown(collections=[ZhihuCollection("Python 开发笔记", "", "https://x/fav", now)])
     auth = _auth(db, settings, redis=redis)
     user = auth.complete_login(code="a", nonce=auth.start_login().nonce).user
     _portrait(db, redis, zhihu).sync(user.id)
@@ -178,11 +177,7 @@ def test_fetch_failure_keeps_portrait_and_blocks_self_report(
 ) -> None:
     now = int(datetime.now(UTC).timestamp())
     redis = FakeRedis()
-    zhihu = FakeZhihu(
-        contents=[
-            ZhihuContent("Python 开发笔记", "", "https://x/1", "article", now)
-        ]
-    )
+    zhihu = FakeZhihu(contents=[ZhihuContent("Python 开发笔记", "", "https://x/1", "article", now)])
     auth = _auth(db, settings, redis=redis)
     user = auth.complete_login(code="a", nonce=auth.start_login().nonce).user
     portrait = _portrait(db, redis, zhihu)

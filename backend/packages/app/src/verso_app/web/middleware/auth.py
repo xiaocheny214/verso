@@ -6,9 +6,6 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
-from verso_framework.config import get_app_settings
-from verso_framework.db import get_redis, get_session
-from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClient
 
 from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
@@ -19,6 +16,9 @@ from verso_app.server.portrait.service import PortraitService
 from verso_app.server.quality.judge import build_judge
 from verso_app.server.quality.service import QualityService
 from verso_app.server.reputation.service import ReputationService
+from verso_framework.config import get_app_settings
+from verso_framework.db import get_redis, get_session
+from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClient
 
 SessionDep = Annotated[Session, Depends(get_session)]
 

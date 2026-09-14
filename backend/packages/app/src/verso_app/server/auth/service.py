@@ -9,14 +9,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from verso_common.enums import BizCode, UserStatus
-from verso_common.exceptions import BizException
-from verso_framework.config.app import AppSettings
-from verso_framework.providers.zhihu import OAuthClient, ZhihuProfile
 
 from verso_app.server.auth.models import User
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.reputation.service import ReputationService
+from verso_common.enums import BizCode, UserStatus
+from verso_common.exceptions import BizException
+from verso_framework.config.app import AppSettings
+from verso_framework.providers.zhihu import OAuthClient, ZhihuProfile
 
 logger = logging.getLogger("verso.auth")
 
@@ -97,9 +97,7 @@ class AuthService:
         return user
 
     def _upsert_user(self, profile: ZhihuProfile) -> User:
-        user = self._session.scalar(
-            select(User).where(User.zhihu_url_token == profile.url_token)
-        )
+        user = self._session.scalar(select(User).where(User.zhihu_url_token == profile.url_token))
         now = datetime.now(UTC)
         if user is None:
             user = User(

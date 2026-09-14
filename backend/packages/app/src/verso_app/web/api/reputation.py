@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from verso_common.models import ReputationView
-from verso_common.result import Response as ApiResponse
 
 from verso_app.server.auth.models import User
 from verso_app.server.reputation.service import ReputationService
@@ -15,6 +13,8 @@ from verso_app.web.middleware.auth import (
     get_current_user,
     get_reputation_service,
 )
+from verso_common.models import ReputationView
+from verso_common.result import Response as ApiResponse
 
 router = APIRouter(tags=["reputation"])
 

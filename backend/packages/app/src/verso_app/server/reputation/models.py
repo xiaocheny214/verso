@@ -20,9 +20,7 @@ class Reputation(Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     score: Mapped[int] = mapped_column(Integer, nullable=False, default=REPUTATION_INITIAL_SCORE)
-    eligibility: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=Eligibility.ACTIVE
-    )
+    eligibility: Mapped[str] = mapped_column(String(16), nullable=False, default=Eligibility.ACTIVE)
     suspended_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
