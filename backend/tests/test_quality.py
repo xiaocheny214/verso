@@ -25,7 +25,11 @@ from verso_app.server.reputation.service import ReputationService
 from verso_app.web.api.quality import router as quality_router
 from verso_app.web.handler import register_exception_handlers
 from verso_app.web.middleware.auth import get_current_user, get_quality_service
-from verso_common.constants import REPUTATION_INITIAL_SCORE, REPUTATION_POOR_DELTA
+from verso_common.constants import (
+    REPUTATION_GOOD_DELTA,
+    REPUTATION_INITIAL_SCORE,
+    REPUTATION_POOR_DELTA,
+)
 from verso_common.enums import (
     BizCode,
     Eligibility,
@@ -154,11 +158,19 @@ def test_poor_deducts_once(db: Session) -> None:
     assert row.answer_text == "嗯"
 
 
-@pytest.mark.parametrize("verdict", [ReviewVerdict.GOOD, ReviewVerdict.UNCLEAR])
-def test_non_poor_does_not_deduct(db: Session, verdict: ReviewVerdict) -> None:
+def test_good_adds_once(db: Session) -> None:
     alice, bob, pair_id = _pair(db)
     ExchangeService(db).send(bob, pair_id, text="深蹲一周三次，先把动作做标准")
-    _quality(db, verdict).submit(alice, pair_id)
+    view = _quality(db, ReviewVerdict.GOOD).submit(alice, pair_id)
+    assert view.verdict == ReviewVerdict.GOOD
+    assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE + REPUTATION_GOOD_DELTA
+    assert db.get(Reputation, alice.id).score == REPUTATION_INITIAL_SCORE
+
+
+def test_unclear_does_not_change_score(db: Session) -> None:
+    alice, bob, pair_id = _pair(db)
+    ExchangeService(db).send(bob, pair_id, text="深蹲一周三次，先把动作做标准")
+    _quality(db, ReviewVerdict.UNCLEAR).submit(alice, pair_id)
     assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE
 
 
@@ -199,7 +211,7 @@ def test_peers_can_review_each_other(db: Session) -> None:
     _quality(db, ReviewVerdict.POOR).submit(alice, pair_id)
     _quality(db, ReviewVerdict.GOOD).submit(bob, pair_id)
     assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE - REPUTATION_POOR_DELTA
-    assert db.get(Reputation, alice.id).score == REPUTATION_INITIAL_SCORE
+    assert db.get(Reputation, alice.id).score == REPUTATION_INITIAL_SCORE + REPUTATION_GOOD_DELTA
     assert len(db.scalars(select(Review)).all()) == 2
 
 
@@ -222,10 +234,9 @@ def test_structured_score_poor_deducts(db: Session) -> None:
     [
         (60, ReviewVerdict.UNCLEAR),
         (80, ReviewVerdict.UNCLEAR),
-        (81, ReviewVerdict.GOOD),
     ],
 )
-def test_structured_mid_and_good_do_not_deduct(
+def test_structured_mid_does_not_change_score(
     db: Session, score: int, verdict: ReviewVerdict
 ) -> None:
     alice, bob, pair_id = _pair(db)
@@ -239,6 +250,20 @@ def test_structured_mid_and_good_do_not_deduct(
     assert view.verdict == verdict
     assert view.score == score
     assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE
+
+
+def test_structured_good_adds(db: Session) -> None:
+    alice, bob, pair_id = _pair(db)
+    ExchangeService(db).send(bob, pair_id, text="可以先看基础动作")
+    view = QualityService(
+        db,
+        exchange=ExchangeService(db),
+        reputation=ReputationService(),
+        judge=LlmAnswerJudge(FakeChat(AnswerScore(score=81, reason="夹具"))),
+    ).submit(alice, pair_id)
+    assert view.verdict == ReviewVerdict.GOOD
+    assert view.score == 81
+    assert db.get(Reputation, bob.id).score == REPUTATION_INITIAL_SCORE + REPUTATION_GOOD_DELTA
 
 
 def test_model_failure_records_unclear(db: Session) -> None:

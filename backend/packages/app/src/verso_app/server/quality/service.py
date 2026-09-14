@@ -1,4 +1,4 @@
-"""人先点不满意，再判定留言。只写 review；poor 时让 reputation 扣分。"""
+"""人先点不满意，再判定留言。只写 review；poor 扣成色、good 加成色。"""
 
 from __future__ import annotations
 
@@ -60,6 +60,8 @@ class QualityService:
         self._session.add(review)
         if judgement.verdict == ReviewVerdict.POOR:
             self._reputation.apply_poor(self._session, reviewee_id)
+        elif judgement.verdict == ReviewVerdict.GOOD:
+            self._reputation.apply_good(self._session, reviewee_id)
         self._session.flush()
         return self._to_view(review)
 

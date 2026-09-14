@@ -14,6 +14,7 @@ from verso_app.web.api import (
     match_router,
     portrait_router,
     quality_router,
+    reputation_router,
 )
 from verso_app.web.handler import register_exception_handlers
 
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(match_router)
     app.include_router(exchange_router)
     app.include_router(quality_router)
+    app.include_router(reputation_router)
 
     @app.get("/health", include_in_schema=False)
     def health() -> Response[dict[str, str]]:

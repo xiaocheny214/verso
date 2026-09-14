@@ -9,7 +9,7 @@ from verso_common.enums import MatchConditionStatus, StrengthTag
 def test_enums_are_stable() -> None:
     assert StrengthTag.INTERNET == "互联网"
     assert MatchConditionStatus.MATCHED == "matched"
-    assert REPUTATION_INITIAL_SCORE == 3
+    assert REPUTATION_INITIAL_SCORE == 65
 
 
 def test_template_pipeline_opening_topics() -> None:
