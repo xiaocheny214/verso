@@ -26,12 +26,9 @@ export default function SettingsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
-  const stable = demoUser.portraits.find(
-    (portrait) => portrait.horizon === "stable",
-  );
-  const recent = demoUser.portraits.find(
-    (portrait) => portrait.horizon === "recent_7d",
-  );
+  const portraits = demoUser.portraits ?? [];
+  const stable = portraits.find((portrait) => portrait.horizon === "stable");
+  const recent = portraits.find((portrait) => portrait.horizon === "recent_7d");
 
   async function handleSyncPortrait() {
     setIsSyncing(true);
@@ -142,7 +139,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {stable?.strengths.map((s) => (
+                  {(stable?.strengths ?? []).map((s) => (
                     <div
                       key={`${s.tag}-${s.evidence_title}`}
                       className="p-3 rounded-lg border border-slate-100 bg-slate-50 text-xs"
@@ -176,7 +173,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {recent?.strengths.map((s) => (
+                  {(recent?.strengths ?? []).map((s) => (
                     <div
                       key={`${s.tag}-${s.evidence_title}`}
                       className="p-3 rounded-lg border border-slate-100 bg-slate-50 text-xs"
