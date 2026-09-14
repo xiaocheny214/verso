@@ -103,7 +103,9 @@ export default function ExchangePage() {
 
                 <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
                   <span>{view === "closed" ? "已结束" : "剩余 21:34"}</span>
-                  <span className="text-indigo-600 font-semibold">当前对局</span>
+                  <span className="text-indigo-600 font-semibold">
+                    当前对局
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -187,7 +189,10 @@ export default function ExchangePage() {
                       <span className="text-xs font-bold text-slate-800">
                         {peer.name} 正在回答你的问题
                       </span>
-                      <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 text-[10px]">
+                      <Badge
+                        variant="outline"
+                        className="text-emerald-700 bg-emerald-50 border-emerald-200 text-[10px]"
+                      >
                         健身
                       </Badge>
                     </div>
@@ -231,7 +236,10 @@ export default function ExchangePage() {
                       <span className="text-xs font-bold text-slate-800">
                         你正在回答 {peer.name} 的问题
                       </span>
-                      <Badge variant="outline" className="text-indigo-700 bg-indigo-50 border-indigo-200 text-[10px]">
+                      <Badge
+                        variant="outline"
+                        className="text-indigo-700 bg-indigo-50 border-indigo-200 text-[10px]"
+                      >
                         互联网
                       </Badge>
                     </div>
@@ -250,7 +258,8 @@ export default function ExchangePage() {
                         >
                           <p>{m.text}</p>
                           <div className="text-[10px] text-indigo-700 font-medium">
-                            你 · {m.id.startsWith("demo-") ? "刚刚" : "今天 19:24"}
+                            你 ·{" "}
+                            {m.id.startsWith("demo-") ? "刚刚" : "今天 19:24"}
                           </div>
                         </div>
                       ))}

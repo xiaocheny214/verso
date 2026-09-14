@@ -159,7 +159,10 @@ export default function MatchPage() {
               <CardTitle className="text-base font-bold text-slate-900">
                 双向互补匹配成功
               </CardTitle>
-              <Badge variant="secondary" className="text-emerald-700 bg-emerald-50 border-emerald-200">
+              <Badge
+                variant="secondary"
+                className="text-emerald-700 bg-emerald-50 border-emerald-200"
+              >
                 对局就绪
               </Badge>
             </CardHeader>

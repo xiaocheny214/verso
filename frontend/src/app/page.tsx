@@ -44,8 +44,13 @@ export default function Home() {
                 翻开的叶（对局）
               </span>
               <div className="flex items-center gap-2 pt-1">
-                <span className="text-lg font-bold text-slate-900">1 局进行中</span>
-                <Badge variant="secondary" className="text-indigo-700 bg-indigo-50 border-indigo-200">
+                <span className="text-lg font-bold text-slate-900">
+                  1 局进行中
+                </span>
+                <Badge
+                  variant="secondary"
+                  className="text-indigo-700 bg-indigo-50 border-indigo-200"
+                >
                   互答中
                 </Badge>
               </div>
@@ -61,7 +66,9 @@ export default function Home() {
                 沉淀能力画像
               </span>
               <div className="flex items-center gap-2 pt-1">
-                <span className="text-lg font-bold text-slate-900">5 项能力</span>
+                <span className="text-lg font-bold text-slate-900">
+                  5 项能力
+                </span>
               </div>
             </CardHeader>
             <CardContent>
