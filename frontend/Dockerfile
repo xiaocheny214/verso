@@ -3,19 +3,30 @@
 # 仓库暂无 frontend-ci；Next 16 要求 Node 20+，钉 22 LTS。
 FROM node:22-alpine
 
-# 国内网络:走镜像源,与 backend/Dockerfile 换阿里 pypi 源同因
+# 国内网络：依赖走镜像源。corepack 拉 pnpm 时 undici 默认 10s 连接超时，
+# npmmirror 偶发连不上会直接失败，所以不用 corepack，改用 npm 装钉死版本并换源重试。
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
-    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=300000 \
     NEXT_TELEMETRY_DISABLED=1 \
-    VERSO_STATIC_EXPORT=1
+    VERSO_STATIC_EXPORT=1 \
+    NODE_OPTIONS=--dns-result-order=ipv4first
 
 WORKDIR /app
 
-RUN corepack enable
+RUN npm install -g pnpm@12.3.4 \
+    || NPM_CONFIG_REGISTRY=https://mirrors.cloud.tencent.com/npm/ npm install -g pnpm@12.3.4 \
+    || NPM_CONFIG_REGISTRY=https://registry.npmjs.org npm install -g pnpm@12.3.4
 
 # 先只拷依赖清单,命中 Docker layer cache —— 改源码不触发重装依赖
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set fetch-retries 5 \
+    && pnpm config set fetch-timeout 300000 \
+    && pnpm install --frozen-lockfile \
+    || NPM_CONFIG_REGISTRY=https://mirrors.cloud.tencent.com/npm/ pnpm install --frozen-lockfile \
+    || NPM_CONFIG_REGISTRY=https://registry.npmjs.org pnpm install --frozen-lockfile
 
 COPY . .
 
