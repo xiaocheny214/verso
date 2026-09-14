@@ -4,7 +4,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from verso_common.constants import REPUTATION_INITIAL_SCORE
+from verso_common.constants import (
+    REPUTATION_INITIAL_SCORE,
+    REPUTATION_MIN_ACTIVE_SCORE,
+    REPUTATION_SCORE_MAX,
+)
 from verso_common.enums import (
     Eligibility,
     ExchangeStatus,
@@ -42,6 +46,7 @@ class MatchPeerView(BaseModel):
     want_text: str
     want_tag: StrengthTag
     strengths: list[StrengthTag] = Field(default_factory=list)
+    score: int
 
 
 class MatchConditionView(BaseModel):
@@ -96,5 +101,7 @@ class ReviewView(BaseModel):
 
 class ReputationView(BaseModel):
     score: int = REPUTATION_INITIAL_SCORE
+    score_max: int = REPUTATION_SCORE_MAX
+    min_active_score: int = REPUTATION_MIN_ACTIVE_SCORE
     eligibility: Eligibility = Eligibility.ACTIVE
     suspended_until: datetime | None = None

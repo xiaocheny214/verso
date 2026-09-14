@@ -15,7 +15,12 @@ from verso_app.server.reputation.models import Reputation
 from verso_app.web.api.match import router as match_router
 from verso_app.web.handler import register_exception_handlers
 from verso_app.web.middleware.auth import get_current_user, get_match_service
-from verso_common.constants import PAIR_WINDOW_HOURS, REPUTATION_INITIAL_SCORE
+from verso_common.constants import (
+    PAIR_WINDOW_HOURS,
+    REPUTATION_INITIAL_SCORE,
+    REPUTATION_MIN_ACTIVE_SCORE,
+    REPUTATION_POOR_DELTA,
+)
 from verso_common.enums import (
     BizCode,
     Eligibility,
@@ -128,11 +133,13 @@ def test_complementary_pair_shares_pair_id(db: Session) -> None:
     assert matched.peer is not None
     assert matched.peer.id == str(alice.id)
     assert matched.peer.want_tag == StrengthTag.FITNESS
+    assert matched.peer.score == REPUTATION_INITIAL_SCORE
     assert StrengthTag.PROGRAMMING in matched.peer.strengths
     alice_view = service.current(alice)
     assert alice_view.pair_id == matched.pair_id
     assert alice_view.peer is not None
     assert alice_view.peer.id == str(bob.id)
+    assert alice_view.peer.score == REPUTATION_INITIAL_SCORE
     rows = db.scalars(select(MatchCondition)).all()
     assert {row.pair_id for row in rows} == {UUID(matched.pair_id)}
     assert "strengths" not in MatchCondition.__table__.c
@@ -182,6 +189,45 @@ def test_duplicate_waiting_conflicts(db: Session) -> None:
     with pytest.raises(BizException) as exc:
         service.submit(alice, want_text="还想学理财", want_tag=StrengthTag.FINANCE)
     assert exc.value.code == BizCode.CONFLICT
+
+
+def test_score_below_lock_cannot_enter(db: Session) -> None:
+    service = MatchService(db)
+    alice = _user(
+        db,
+        name="Alice",
+        stable=[StrengthTag.PROGRAMMING],
+        score=REPUTATION_INITIAL_SCORE - 2 * REPUTATION_POOR_DELTA,
+    )
+    with pytest.raises(BizException) as exc:
+        service.submit(alice, want_text="想学健身", want_tag=StrengthTag.FITNESS)
+    assert exc.value.code == BizCode.CONFLICT
+
+
+def test_score_on_lock_line_can_enter(db: Session) -> None:
+    service = MatchService(db)
+    alice = _user(
+        db,
+        name="Alice",
+        stable=[StrengthTag.PROGRAMMING],
+        score=REPUTATION_MIN_ACTIVE_SCORE,
+    )
+    view = service.submit(alice, want_text="想学健身", want_tag=StrengthTag.FITNESS)
+    assert view.status == MatchConditionStatus.WAITING
+
+
+def test_prefers_closer_reputation(db: Session) -> None:
+    service = MatchService(db)
+    alice = _user(db, name="Alice", stable=[StrengthTag.FITNESS], score=90)
+    bob = _user(db, name="Bob", stable=[StrengthTag.FITNESS], score=66)
+    carol = _user(db, name="Carol", stable=[StrengthTag.INTERNET], score=65)
+    service.submit(alice, want_text="想了解互联网", want_tag=StrengthTag.INTERNET)
+    service.submit(bob, want_text="也想了解互联网", want_tag=StrengthTag.INTERNET)
+    matched = service.submit(carol, want_text="徒手怎么练", want_tag=StrengthTag.FITNESS)
+    assert matched.status == MatchConditionStatus.MATCHED
+    assert matched.peer is not None
+    assert matched.peer.id == str(bob.id)
+    assert matched.peer.score == 66
 
 
 def test_suspended_user_cannot_enter(db: Session) -> None:

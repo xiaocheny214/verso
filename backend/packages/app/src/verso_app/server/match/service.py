@@ -7,17 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
-from verso_common.constants import (
-    MATCH_WAIT_HOURS,
-    PAIR_WINDOW_HOURS,
-    REPUTATION_MIN_ACTIVE_SCORE,
-)
-from verso_common.enums import (
-    BizCode,
-    Eligibility,
-    MatchConditionStatus,
-    StrengthTag,
-)
+from verso_common.constants import MATCH_WAIT_HOURS, PAIR_WINDOW_HOURS
+from verso_common.enums import BizCode, MatchConditionStatus, StrengthTag
 from verso_common.exceptions import BizException
 from verso_common.models import MatchConditionView, MatchPeerView
 
@@ -25,7 +16,7 @@ from verso_app.server.auth.models import User
 from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
 from verso_app.server.match.models import MatchCondition
 from verso_app.server.portrait.models import Portrait
-from verso_app.server.reputation.models import Reputation
+from verso_app.server.reputation.service import ReputationService
 
 
 class MatchService:
@@ -34,9 +25,11 @@ class MatchService:
         session: Session,
         *,
         exchange: ExchangeOpener | None = None,
+        reputation: ReputationService | None = None,
     ) -> None:
         self._session = session
         self._exchange = exchange or NoopExchangeOpener()
+        self._reputation = reputation or ReputationService()
 
     def submit(self, user: User, *, want_text: str, want_tag: StrengthTag) -> MatchConditionView:
         text = want_text.strip()
@@ -99,6 +92,7 @@ class MatchService:
 
     def _try_pair(self, mine: MatchCondition, now: datetime) -> None:
         my_strengths = self._strengths(mine.user_id)
+        my_score = self._reputation.score_of(self._session, mine.user_id)
         candidates = self._session.scalars(
             select(MatchCondition)
             .where(
@@ -110,6 +104,7 @@ class MatchService:
             )
             .order_by(MatchCondition.created_at.asc())
         ).all()
+        compatible: list[MatchCondition] = []
         for other in candidates:
             if other.want_tag == mine.want_tag:
                 continue
@@ -118,6 +113,14 @@ class MatchService:
             other_strengths = self._strengths(other.user_id)
             if mine.want_tag not in other_strengths or other.want_tag not in my_strengths:
                 continue
+            compatible.append(other)
+        compatible.sort(
+            key=lambda other: (
+                abs(my_score - self._reputation.score_of(self._session, other.user_id)),
+                other.created_at,
+            )
+        )
+        for other in compatible:
             locked = self._lock_waiting(other.id, now)
             if locked is None:
                 continue
@@ -177,16 +180,7 @@ class MatchService:
             raise BizException("当前不能配对", code=BizCode.CONFLICT)
 
     def _is_eligible(self, user_id: uuid.UUID, now: datetime) -> bool:
-        row = self._session.get(Reputation, user_id)
-        if row is None:
-            return False
-        if row.eligibility != Eligibility.ACTIVE:
-            return False
-        if row.score < REPUTATION_MIN_ACTIVE_SCORE:
-            return False
-        if row.suspended_until is not None and row.suspended_until > now:
-            return False
-        return True
+        return self._reputation.allows_match(self._session, user_id, now)
 
     def _assert_can_enter(self, user_id: uuid.UUID, now: datetime) -> None:
         if self._open_condition(user_id, now) is not None:
@@ -261,4 +255,5 @@ class MatchService:
             want_text=peer_row.want_text,
             want_tag=StrengthTag(peer_row.want_tag),
             strengths=strengths,
+            score=self._reputation.score_of(self._session, peer.id),
         )

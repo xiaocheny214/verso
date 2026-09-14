@@ -1,4 +1,4 @@
-"""进程级应用配置：Cookie Session、知乎 OAuth、质量路径用的模型。
+"""进程级应用配置：Cookie Session、知乎 OAuth、成色阈值、质量路径用的模型。
 
 密钥不进仓库。字段前缀 ``VERSO_``。
 """
@@ -6,6 +6,13 @@
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from verso_common.constants import (
+    REPUTATION_GOOD_DELTA,
+    REPUTATION_INITIAL_SCORE,
+    REPUTATION_MIN_ACTIVE_SCORE,
+    REPUTATION_POOR_DELTA,
+    REPUTATION_SCORE_MAX,
+)
 
 
 class AppSettings(BaseSettings):
@@ -28,6 +35,11 @@ class AppSettings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = ""
+    reputation_score_max: int = REPUTATION_SCORE_MAX
+    reputation_initial_score: int = REPUTATION_INITIAL_SCORE
+    reputation_poor_delta: int = REPUTATION_POOR_DELTA
+    reputation_good_delta: int = REPUTATION_GOOD_DELTA
+    reputation_min_active_score: int = REPUTATION_MIN_ACTIVE_SCORE
 
 
 @lru_cache

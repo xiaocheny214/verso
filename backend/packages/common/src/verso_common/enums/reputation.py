@@ -1,4 +1,4 @@
-"""reputation：匹配资格。只有这里改分。"""
+"""成色：匹配资格。只有这里改分。"""
 
 from enum import StrEnum
 

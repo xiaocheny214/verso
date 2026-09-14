@@ -23,13 +23,17 @@ from verso_app.server.reputation.service import ReputationService
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
+def get_reputation_service() -> ReputationService:
+    return ReputationService(settings=get_app_settings())
+
+
 def get_auth_service(session: SessionDep) -> AuthService:
     settings = get_app_settings()
     return AuthService(
         session=session,
         store=SessionStore(get_redis()),
         oauth=HttpxOAuthClient(settings),
-        reputation=ReputationService(),
+        reputation=ReputationService(settings=settings),
         settings=settings,
     )
 
@@ -47,7 +51,11 @@ PortraitDep = Annotated[PortraitService, Depends(get_portrait_service)]
 
 
 def get_match_service(session: SessionDep) -> MatchService:
-    return MatchService(session=session, exchange=ExchangeService(session))
+    return MatchService(
+        session=session,
+        exchange=ExchangeService(session),
+        reputation=ReputationService(settings=get_app_settings()),
+    )
 
 
 def get_exchange_service(session: SessionDep) -> ExchangeService:
@@ -55,11 +63,12 @@ def get_exchange_service(session: SessionDep) -> ExchangeService:
 
 
 def get_quality_service(session: SessionDep) -> QualityService:
+    settings = get_app_settings()
     return QualityService(
         session,
         exchange=ExchangeService(session),
-        reputation=ReputationService(),
-        judge=build_judge(get_app_settings()),
+        reputation=ReputationService(settings=settings),
+        judge=build_judge(settings),
     )
 
 
