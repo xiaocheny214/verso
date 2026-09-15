@@ -1,1 +1,1 @@
-export { oauthApi } from "./oauth.api";
+export { authApi, sessionQueryKey } from "./auth.api";
