@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Leaf, Settings } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "cn";
+
+import { useLogout, useSession } from "@/components/use-session";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn, displayInitial } from "@/lib/utils";
 
 export const navItems = [
   { label: "匹配", href: "/match" },
@@ -14,6 +17,8 @@ export const navItems = [
 export function Header() {
   const pathname = usePathname();
   const isSettings = pathname === "/settings";
+  const { user } = useSession();
+  const logout = useLogout();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur-sm">
@@ -50,19 +55,43 @@ export function Header() {
         </nav>
 
         <div className="justify-self-end flex items-center gap-2">
-          <Link
-            href="/settings"
-            className={cn(
-              buttonVariants({
-                variant: isSettings ? "secondary" : "outline",
-                size: "sm",
-              }),
-              "gap-1.5",
-            )}
-          >
-            <Settings className="h-4 w-4" />
-            <span>设置</span>
-          </Link>
+          {user ? (
+            <div className="flex items-center gap-2">
+              <Avatar size="sm">
+                {user.avatar_url ? (
+                  <AvatarImage src={user.avatar_url} alt={user.name} />
+                ) : null}
+                <AvatarFallback>{displayInitial(user.name)}</AvatarFallback>
+              </Avatar>
+              <span className="hidden sm:inline max-w-28 truncate text-sm font-medium text-slate-800">
+                {user.name}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={logout.isPending}
+                onClick={() => {
+                  logout.mutate();
+                }}
+              >
+                退出
+              </Button>
+              <Link
+                href="/settings"
+                className={cn(
+                  buttonVariants({
+                    variant: isSettings ? "secondary" : "outline",
+                    size: "sm",
+                  }),
+                  "gap-1.5",
+                )}
+              >
+                <Settings className="h-4 w-4" />
+                <span>设置</span>
+              </Link>
+            </div>
+          ) : null}
         </div>
       </div>
     </header>
