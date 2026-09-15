@@ -266,3 +266,47 @@ def test_llm_input_is_bounded_and_older_content_uses_rules() -> None:
     payload = json.loads(model.structured.messages[1].content)
     assert len(payload["evidence"]) == 24
     assert decisions[-1].extractor == "rule-v2"
+
+
+def test_llm_classifier_parses_fenced_json_array() -> None:
+    fenced = (
+        "```json\n"
+        '[\n  {\n    "evidence_id": "post",\n    "tags": ["编程"],\n'
+        '    "signal": "demonstrates_skill",\n    "confidence": 92,\n'
+        '    "reason": "包含实践过程"\n  }\n]\n'
+        "```"
+    )
+    classifier = LlmEvidenceClassifier(_Model(fenced))
+    decisions = classifier.classify([_evidence("post")])
+
+    assert [item.evidence_id for item in decisions] == ["post"]
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].tags == (StrengthTag.PROGRAMMING,)
+
+
+def test_llm_classifier_parses_fenced_json_object() -> None:
+    fenced = (
+        "```json\n"
+        '{\n  "decisions": [\n    {\n      "evidence_id": "post",\n'
+        '      "tags": ["编程"],\n      "signal": "demonstrates_skill",\n'
+        '      "confidence": 92,\n      "reason": "包含实践过程"\n    }\n  ]\n}\n'
+        "```"
+    )
+    classifier = LlmEvidenceClassifier(_Model(fenced))
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].tags == (StrengthTag.PROGRAMMING,)
+
+
+def test_llm_classifier_parses_bare_json_array() -> None:
+    bare = (
+        '[\n  {\n    "evidence_id": "post",\n    "tags": ["编程"],\n'
+        '    "signal": "demonstrates_skill",\n    "confidence": 92,\n'
+        '    "reason": "包含实践过程"\n  }\n]'
+    )
+    classifier = LlmEvidenceClassifier(_Model(bare))
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].tags == (StrengthTag.PROGRAMMING,)

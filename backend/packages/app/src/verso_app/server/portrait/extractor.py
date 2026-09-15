@@ -158,6 +158,36 @@ class _LlmBatch(BaseModel):
     decisions: list[_LlmDecision]
 
 
+def _strip_code_fences(text: str) -> str:
+    """Remove ```json ...``` style fences and surrounding prose from model output."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        first_newline = stripped.find("\n")
+        body = stripped[first_newline + 1 :] if first_newline != -1 else stripped[3:]
+        if body.rstrip().endswith("```"):
+            body = body.rstrip()[:-3]
+        return body.strip()
+    return stripped
+
+
+def _parse_llm_batch(raw: object) -> _LlmBatch:
+    """Accept a Pydantic model, a dict, a JSON string, or a bare JSON array.
+
+    Some providers wrap the response in ```json fences or return the decisions
+    array directly instead of the {"decisions": [...]} object.
+    """
+    if isinstance(raw, _LlmBatch):
+        return raw
+    if isinstance(raw, str):
+        content = _strip_code_fences(raw)
+        decoded = json.loads(content)
+    else:
+        decoded = raw
+    if isinstance(decoded, list):
+        return _LlmBatch.model_validate({"decisions": decoded})
+    return _LlmBatch.model_validate(decoded)
+
+
 _SYSTEM_PROMPT = """你是 Verso 的能力证据分类器。你的任务不是描述人格，而是判断每条知乎证据能否证明用户有能力教别人。
 
 约束：
@@ -214,7 +244,7 @@ class LlmEvidenceClassifier:
                 ),
             ]
         )
-        parsed = raw if isinstance(raw, _LlmBatch) else _LlmBatch.model_validate(raw)
+        parsed = _parse_llm_batch(raw)
         expected = delegated_ids
         returned = [item.evidence_id for item in parsed.decisions]
         if len(returned) != len(set(returned)) or set(returned) != expected:
