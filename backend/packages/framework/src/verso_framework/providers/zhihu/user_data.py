@@ -1,7 +1,8 @@
 """代表授权用户读取创作 / 关注 / 收藏。
 
 开放接口没有「我点过赞」的列表；兴趣信号用近期收藏和收藏夹内容。
-HTTP 非 2xx 或业务码不是 20000 时抛错；只有成功且 Items 为空才返回空列表。
+HTTP 非 2xx，或业务码既不是文档约定的 0、也不是 OAuth 实测的 20000 时抛错。
+只有成功且 Items 为空才返回空列表。
 """
 
 from __future__ import annotations
@@ -16,7 +17,8 @@ from verso_framework.config.app import AppSettings
 
 API_BASE = "https://developer.zhihu.com"
 _FAVLIST_SCAN = 3
-_ZHIHU_OK = 20000
+# user-api.md / http-api.md 成功码是 Code:0；OAuth 名片实测还有 lowercase code:20000。
+_ZHIHU_OK = frozenset({0, 20000})
 
 
 class ZhihuUserDataError(RuntimeError):
@@ -175,8 +177,10 @@ class HttpxUserDataClient:
             raise ZhihuUserDataError(f"zhihu GET {path} invalid json") from exc
         if not isinstance(payload, dict):
             raise ZhihuUserDataError(f"zhihu GET {path} not an object")
-        if not _zhihu_ok(payload.get("code")):
-            raise ZhihuUserDataError(f"zhihu GET {path} code={payload.get('code')}")
+        code = _biz_code(payload)
+        if not _zhihu_ok(code):
+            keys = ",".join(sorted(str(key) for key in payload))
+            raise ZhihuUserDataError(f"zhihu GET {path} code={code} keys={keys}")
         return payload
 
 
@@ -207,19 +211,29 @@ def _push_unique(found: list[ZhihuCollection], seen: set[str], item: ZhihuCollec
     found.append(item)
 
 
+def _biz_code(payload: dict) -> object:
+    if "code" in payload:
+        return payload.get("code")
+    return payload.get("Code")
+
+
 def _zhihu_ok(code: object) -> bool:
     try:
-        return int(code) == _ZHIHU_OK
+        return int(code) in _ZHIHU_OK
     except (TypeError, ValueError):
         return False
 
 
 def _items(payload: dict) -> list[dict]:
     data = payload.get("Data")
-    if isinstance(data, dict) and "Items" in data:
-        raw_items = data["Items"]
+    if not isinstance(data, dict):
+        data = payload.get("data")
+    if isinstance(data, dict) and ("Items" in data or "items" in data):
+        raw_items = data["Items"] if "Items" in data else data.get("items")
     elif "Items" in payload:
         raw_items = payload["Items"]
+    elif "items" in payload:
+        raw_items = payload["items"]
     else:
         raise ZhihuUserDataError("zhihu payload missing Items")
     if not isinstance(raw_items, list):
