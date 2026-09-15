@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Compass,
@@ -9,19 +11,63 @@ import {
 
 import { AppFrame } from "@/components/app-frame";
 import { ReciprocityMark } from "@/components/reciprocity-mark";
+import { useSession, useZhihuLogin } from "@/components/use-session";
 import { demoMatch } from "@/model/match";
+import type { UserCard } from "@/model/portrait";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
 
-export default function Home() {
+function LoginEntry({
+  errorMessage,
+  isPending,
+  onLogin,
+}: {
+  errorMessage: string | null;
+  isPending: boolean;
+  onLogin: () => void;
+}) {
+  return (
+    <AppFrame>
+      <div className="max-w-lg mx-auto">
+        <Card className="bg-white border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-base font-bold text-slate-900">
+              用知乎身份进入 Verso
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-600">
+              授权后会看到你的站内身份。画像、匹配和互答需要先登录。
+            </p>
+            {errorMessage ? (
+              <p className="text-sm text-red-600">{errorMessage}</p>
+            ) : null}
+            <Button
+              type="button"
+              disabled={isPending}
+              onClick={onLogin}
+              className="w-full"
+            >
+              {isPending ? "正在跳转知乎…" : "用知乎登录"}
+            </Button>
+            <p className="text-xs text-slate-400">
+              仅读取你公开授权的知乎内容。凭证只留在服务端，不会出现在浏览器里。
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </AppFrame>
+  );
+}
+
+function HomeDashboard({ user }: { user: UserCard }) {
   const peer = demoMatch.peer!;
 
   return (
     <AppFrame>
       <div className="space-y-6">
-        {/* Status Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="bg-white border-slate-200">
             <CardHeader className="pb-2">
@@ -34,7 +80,9 @@ export default function Home() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-slate-500">林屿 · 知乎内容已连接</p>
+              <p className="text-xs text-slate-500">
+                {user.name} · 知乎内容已连接
+              </p>
             </CardContent>
           </Card>
 
@@ -77,10 +125,8 @@ export default function Home() {
           </Card>
         </div>
 
-        {/* Main Content: Current Match & Reciprocity Explainer */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Active Match Card */}
             <Card className="bg-white border-slate-200">
               <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
                 <div className="flex items-center gap-2">
@@ -110,7 +156,9 @@ export default function Home() {
                   <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-100 text-xs">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-slate-400">你为对方解答</span>
-                      <span className="font-bold text-indigo-700">林屿</span>
+                      <span className="font-bold text-indigo-700">
+                        {user.name}
+                      </span>
                     </div>
                     <p className="text-slate-700 font-medium line-clamp-2">
                       {peer.want_text}
@@ -133,7 +181,6 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            {/* Reciprocity Explainer */}
             <Card className="bg-white border-slate-200">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-bold text-slate-900">
@@ -146,7 +193,6 @@ export default function Home() {
             </Card>
           </div>
 
-          {/* Right Column: Shortcuts */}
           <div className="space-y-4">
             <Card className="bg-white border-slate-200">
               <CardHeader className="pb-2">
@@ -215,4 +261,36 @@ export default function Home() {
       </div>
     </AppFrame>
   );
+}
+
+export default function Home() {
+  const { user, isPending, isError, error } = useSession();
+  const login = useZhihuLogin();
+
+  if (isPending) {
+    return (
+      <AppFrame>
+        <p className="text-sm text-slate-500">正在确认登录…</p>
+      </AppFrame>
+    );
+  }
+
+  if (!user) {
+    const sessionError =
+      isError && error instanceof Error ? error.message : null;
+    const loginError =
+      login.error instanceof Error ? login.error.message : null;
+
+    return (
+      <LoginEntry
+        errorMessage={loginError ?? sessionError}
+        isPending={login.isPending}
+        onLogin={() => {
+          login.mutate();
+        }}
+      />
+    );
+  }
+
+  return <HomeDashboard user={user} />;
 }
