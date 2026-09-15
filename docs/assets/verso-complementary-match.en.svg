@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" data-generator="fireworks-tech-graph" data-schema-version="1" data-text-metrics="heuristic-v1" data-style-id="1" data-visual-theme="Flat Icon" data-diagram-type="architecture" data-motion-scene="" data-semantic-profile="generic" data-semantic-valid="true" data-quality-profile="showcase" data-max-bends-per-edge="2" data-max-total-bends="8" data-max-route-stretch="1.35" data-max-bridged-crossings="0" data-min-node-gap="40.0" data-min-container-gutter="20.0" data-min-label-clearance="4.0" data-min-segment-length="16.0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 100 960 320" width="960" height="320" data-generator="fireworks-tech-graph" data-schema-version="1" data-text-metrics="heuristic-v1" data-style-id="1" data-visual-theme="Flat Icon" data-diagram-type="architecture" data-motion-scene="" data-semantic-profile="generic" data-semantic-valid="true" data-quality-profile="showcase" data-max-bends-per-edge="2" data-max-total-bends="8" data-max-route-stretch="1.35" data-max-bridged-crossings="0" data-min-node-gap="40.0" data-min-container-gutter="20.0" data-min-label-clearance="4.0" data-min-segment-length="16.0">
   <defs>
     <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/>
@@ -29,23 +29,17 @@
     </filter>
     <style>
     text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
-    .title { font-size: 30px; font-weight: 700; fill: #111827; }
-    .subtitle { font-size: 14px; font-weight: 500; fill: #6b7280; }
     .section { font-size: 13px; font-weight: 700; fill: #2563eb; letter-spacing: 1.4px; }
     .section-sub { font-size: 12px; font-weight: 500; fill: #64748b; }
     .node-title { font-weight: 700; fill: #111827; }
     .node-sub { font-weight: 500; fill: #6b7280; }
     .node-type { font-size: 12px; font-weight: 700; fill: #64748b; letter-spacing: 0.08em; }
     .arrow-label { font-size: 12px; font-weight: 600; fill: #6b7280; }
-    .legend { font-size: 12px; font-weight: 500; fill: #6b7280; }
-    .footnote { font-size: 12px; font-weight: 500; fill: #64748b; }
     .metric-label { font-size: 8.5px; font-weight: 700; fill: #64748b; text-transform: uppercase; }
     .metric-value { font-size: 9.5px; font-weight: 700; fill: #111827; }
     </style>
   </defs>
-  <rect data-graph-role="background" width="960.0" height="520.0" fill="#ffffff"/>
-  <text x="480.0" y="56" text-anchor="middle" class="title">Verso complementary match</text>
-  <text x="480.0" y="82" text-anchor="middle" class="subtitle">They match. Each teaches one thing. Each learns one thing.</text>
+  <rect data-graph-role="background" width="960.0" height="480.0" fill="#ffffff"/>
   <g id="user-a" data-graph-role="container" data-container-id="user-a" data-semantic-role="boundary" data-graph-bounds="40,120,400,400">
   <rect data-graph-role="container" x="40.0" y="120.0" width="360.0" height="280.0" rx="16.0" fill="none" stroke="#dbe5f1" stroke-width="1.4" stroke-dasharray="6 5"/>
   <text x="58.0" y="144.0" class="section">USER A · WRITES CODE</text>
@@ -85,15 +79,5 @@
   <g id="teach-fitness-label" data-graph-role="label" data-owner="teach-fitness" data-graph-bounds="448.64,295,511.36,315">
   <rect x="448.64" y="295.0" width="62.72" height="20" rx="6" fill="#ffffff" opacity="0.94"/>
   <text x="480.0" y="309.0" text-anchor="middle" class="arrow-label">teaches</text>
-  </g>
-  <g id="legend" data-graph-role="legend">
-    <rect id="legend-zone" data-graph-role="reserved" data-reserved-kind="legend" x="38" y="426" width="489.84" height="46" rx="10" fill="none" stroke="none"/>
-    <line data-graph-role="decoration" x1="48.0" y1="440.0" x2="78.0" y2="440.0" stroke="#7c3aed" stroke-width="2.4" marker-end="url(#arrowA)"/>
-    <text data-graph-role="decoration" x="88.0" y="444.0" class="legend">strength → their question</text>
-    <line data-graph-role="decoration" x1="275.84000000000003" y1="440.0" x2="305.84000000000003" y2="440.0" stroke="#f97316" stroke-width="2.4" marker-end="url(#arrowE)"/>
-    <text data-graph-role="decoration" x="315.84000000000003" y="444.0" class="legend">their strength → your question</text>
-  </g>
-  <g id="footer" data-graph-role="reserved" data-graph-bounds="48,478,524,494">
-  <text x="48.0" y="490.0" class="footnote">A writes code, wants fitness · B coaches fitness, wants the internet</text>
   </g>
 </svg>
