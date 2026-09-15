@@ -3,8 +3,12 @@
 import { useState } from "react";
 import { RefreshCw, CheckCircle2 } from "lucide-react";
 
+import { useQuery } from "@tanstack/react-query";
+
 import { AppFrame } from "@/components/app-frame";
+import { ReputationMeter } from "@/components/reputation-meter";
 import { useLogout, useSession } from "@/components/use-session";
+import { reputationApi, reputationQueryKey } from "@/model/reputation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +30,11 @@ const sourceLabels = {
 export default function SettingsPage() {
   const { user } = useSession();
   const logout = useLogout();
+  const reputationQuery = useQuery({
+    queryKey: reputationQueryKey,
+    queryFn: reputationApi.me,
+    retry: false,
+  });
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
@@ -36,6 +45,10 @@ export default function SettingsPage() {
   const portraits = user.portraits ?? [];
   const stable = portraits.find((portrait) => portrait.horizon === "stable");
   const recent = portraits.find((portrait) => portrait.horizon === "recent_7d");
+  const reputationError =
+    reputationQuery.error instanceof Error
+      ? reputationQuery.error.message
+      : "声望暂时无法读取";
 
   async function handleSyncPortrait() {
     setIsSyncing(true);
@@ -109,6 +122,28 @@ export default function SettingsPage() {
               <p>• 仅读取您公开授权的知乎回答、文章及公开收藏夹。</p>
               <p>• 凭证仅在服务端安全保管，不存储于本地浏览器。</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white border-slate-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold text-slate-900">
+              声望
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500">
+              只读资格，决定你能不能进入匹配。不是封号。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reputationQuery.isPending ? (
+              <p className="text-sm text-slate-500">正在读取声望…</p>
+            ) : null}
+            {reputationQuery.isError ? (
+              <p className="text-sm text-rose-600">{reputationError}</p>
+            ) : null}
+            {reputationQuery.data ? (
+              <ReputationMeter reputation={reputationQuery.data} />
+            ) : null}
           </CardContent>
         </Card>
 
