@@ -54,39 +54,55 @@ def test_exchange_code_reads_wrapped_access_token(monkeypatch) -> None:
     assert token.expires_in == 7200
 
 
-def test_fetch_profile_uses_user_data_headers(monkeypatch) -> None:
+def test_fetch_profile_uses_openapi_oauth_bearer(monkeypatch) -> None:
     seen: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        seen["host"] = request.url.host
+        seen["path"] = request.url.path
         seen["authorization"] = request.headers["Authorization"]
-        seen["oauth"] = request.headers["X-OAuth-Token"]
-        seen["ts"] = request.headers["X-Request-Timestamp"]
+        seen["oauth"] = request.headers.get("X-OAuth-Token", "")
+        seen["ts"] = request.headers.get("X-Request-Timestamp", "")
         return httpx.Response(
             200,
             json={
-                "code": 20000,
-                "Data": {
-                    "UrlToken": "alice",
-                    "Fullname": "Alice",
-                    "AvatarUrl": "https://x/a.png",
-                    "Headline": "dev",
-                },
+                "uid": 969570047710216200,
+                "hash_id": "alice",
+                "fullname": "Alice",
+                "avatar_path": "https://x/a.png",
+                "headline": "dev",
+                "email": "alice@example.com",
+                "phone_no": "13800000000",
             },
         )
 
     profile = _client(monkeypatch, handler).fetch_profile("user-tok")
     assert profile.url_token == "alice"
     assert profile.name == "Alice"
-    assert seen["authorization"] == "Bearer platform-secret"
-    assert seen["oauth"] == "user-tok"
-    assert seen["ts"].isdigit()
+    assert profile.avatar_url == "https://x/a.png"
+    assert profile.headline == "dev"
+    assert profile.open_id == "969570047710216200"
+    assert seen["host"] == "openapi.zhihu.com"
+    assert seen["path"] == "/user"
+    assert seen["authorization"] == "Bearer user-tok"
+    assert seen["oauth"] == ""
+    assert seen["ts"] == ""
 
 
-def test_fetch_profile_accepts_uppercase_success_and_nested_user(monkeypatch) -> None:
+def test_fetch_profile_falls_back_to_uid_when_hash_id_missing(monkeypatch) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"uid": 12345, "fullname": "Alice"})
+
+    profile = _client(monkeypatch, handler).fetch_profile("user-tok")
+    assert profile.url_token == "12345"
+    assert profile.open_id == "12345"
+
+
+def test_fetch_profile_accepts_wrapped_user_object(monkeypatch) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"Code": 0, "Data": {"User": {"urlToken": "alice", "Name": "Alice"}}},
+            json={"code": 20000, "Data": {"User": {"hash_id": "alice", "fullname": "Alice"}}},
         )
 
     profile = _client(monkeypatch, handler).fetch_profile("user-tok")
@@ -94,16 +110,9 @@ def test_fetch_profile_accepts_uppercase_success_and_nested_user(monkeypatch) ->
     assert profile.name == "Alice"
 
 
-def test_fetch_profile_accepts_numeric_url_token(monkeypatch) -> None:
-    def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"code": 20000, "Data": {"UrlToken": 12345}})
-
-    assert _client(monkeypatch, handler).fetch_profile("user-tok").url_token == "12345"
-
-
 def test_fetch_profile_http_error_is_not_missing_token(monkeypatch) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(404, json={"code": 20001, "Message": "not found"})
+        return httpx.Response(404, content=b"")
 
     with pytest.raises(RuntimeError, match="zhihu profile HTTP 404"):
         _client(monkeypatch, handler).fetch_profile("user-tok")
@@ -111,16 +120,13 @@ def test_fetch_profile_http_error_is_not_missing_token(monkeypatch) -> None:
 
 def test_fetch_profile_biz_error_is_not_missing_token(monkeypatch) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={"code": 20001, "Message": "鉴权失败", "Data": {}},
-        )
+        return httpx.Response(200, json={"code": 404, "data": "User don't exist"})
 
-    with pytest.raises(RuntimeError, match="zhihu profile code=20001"):
+    with pytest.raises(RuntimeError, match="zhihu profile code=404"):
         _client(monkeypatch, handler).fetch_profile("user-tok")
 
 
-def test_fetch_profile_open_id_without_url_token_still_fails(monkeypatch) -> None:
+def test_fetch_profile_open_id_without_user_id_still_fails(monkeypatch) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"code": 20000, "Data": {"OpenId": "x"}})
 
