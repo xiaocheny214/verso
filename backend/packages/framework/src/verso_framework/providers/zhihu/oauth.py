@@ -13,12 +13,13 @@ from verso_framework.config.app import AppSettings
 
 AUTHORIZE_URL = "https://openapi.zhihu.com/authorize"
 TOKEN_URL = "https://openapi.zhihu.com/access_token"
-PROFILE_URL = "https://developer.zhihu.com/api/v1/user"
+PROFILE_URL = "https://openapi.zhihu.com/user"
 _ZHIHU_OK = {0, 20000}
-_URL_TOKEN_KEYS = ("UrlToken", "url_token", "urlToken")
-_NAME_KEYS = ("Fullname", "Name", "name", "fullname")
-_AVATAR_KEYS = ("AvatarUrl", "avatar_url")
-_HEADLINE_KEYS = ("Headline", "headline")
+_HASH_ID_KEYS = ("hash_id", "hashId", "HashId", "UrlToken", "url_token", "urlToken")
+_UID_KEYS = ("uid", "Uid", "UID")
+_NAME_KEYS = ("fullname", "Fullname", "Name", "name")
+_AVATAR_KEYS = ("avatar_path", "AvatarPath", "avatar_url", "AvatarUrl")
+_HEADLINE_KEYS = ("headline", "Headline")
 _OPEN_ID_KEYS = ("OpenId", "open_id")
 
 logger = logging.getLogger("verso.zhihu.oauth")
@@ -94,12 +95,7 @@ class HttpxOAuthClient:
         )
 
     def fetch_profile(self, access_token: str) -> ZhihuProfile:
-        headers = {
-            "Authorization": f"Bearer {self._settings.zhihu_access_secret}",
-            "X-OAuth-Token": access_token,
-            "X-Request-Timestamp": str(_unix_now()),
-            "Content-Type": "application/json",
-        }
+        headers = {"Authorization": f"Bearer {access_token}"}
         try:
             with self._client() as client:
                 response = client.get(PROFILE_URL, headers=headers)
@@ -114,14 +110,15 @@ class HttpxOAuthClient:
             raise RuntimeError("zhihu profile empty body")
         payload = _read_object(response, kind="profile")
         blobs = _profile_blobs(payload)
-        url_token = _first_token(blobs, _URL_TOKEN_KEYS)
+        uid = _uid_str(blobs)
+        url_token = _first_token(blobs, _HASH_ID_KEYS) or uid
         if url_token:
             return ZhihuProfile(
                 url_token=url_token,
                 name=_first_token(blobs, _NAME_KEYS) or url_token,
                 avatar_url=_first_token(blobs, _AVATAR_KEYS),
                 headline=_first_token(blobs, _HEADLINE_KEYS),
-                open_id=_first_token(blobs, _OPEN_ID_KEYS),
+                open_id=uid or _first_token(blobs, _OPEN_ID_KEYS),
             )
         _log_profile_failure(response, payload)
         biz = _biz_code(payload)
@@ -131,12 +128,6 @@ class HttpxOAuthClient:
 
     def _client(self) -> httpx.Client:
         return httpx.Client(timeout=self._timeout)
-
-
-def _unix_now() -> int:
-    from time import time
-
-    return int(time())
 
 
 def _read_object(response: httpx.Response, *, kind: str, allow_invalid: bool = False) -> dict:
@@ -196,6 +187,20 @@ def _first_token(blobs: list[dict], keys: tuple[str, ...]) -> str | None:
                 return value.strip()
             if isinstance(value, int) and not isinstance(value, bool):
                 return str(value)
+    return None
+
+
+def _uid_str(blobs: list[dict]) -> str | None:
+    """Keep uid as a decimal string; never round-trip through float."""
+    for blob in blobs:
+        for key in _UID_KEYS:
+            value = blob.get(key)
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int):
+                return str(value)
+            if isinstance(value, str) and value.strip().isdigit():
+                return value.strip()
     return None
 
 
