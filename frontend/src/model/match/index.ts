@@ -1,2 +1,3 @@
 export { demoMatch } from "./ticket.mock";
-export type { MatchCondition } from "./ticket.type";
+export { isMatchIneligible, ticketApi } from "./ticket.api";
+export type { MatchCondition, MatchPeer } from "./ticket.type";

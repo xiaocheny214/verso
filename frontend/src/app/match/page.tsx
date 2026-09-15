@@ -6,7 +6,7 @@ import { ArrowRight, RefreshCw, AlertCircle, XCircle } from "lucide-react";
 
 import { AppFrame } from "@/components/app-frame";
 import { MatchExplanation } from "@/components/match-explanation";
-import { demoMatch } from "@/model/match";
+import { demoMatch, isMatchIneligible, ticketApi } from "@/model/match";
 import type { StrengthTag } from "@/model/portrait";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,7 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "cn";
 
-type MatchDemoState = "compose" | "waiting" | "matched" | "cancelled" | "error";
+type MatchDemoState =
+  | "compose"
+  | "waiting"
+  | "matched"
+  | "cancelled"
+  | "error"
+  | "blocked";
 
 const stateLabels: Array<{
   value: MatchDemoState;
@@ -25,6 +31,7 @@ const stateLabels: Array<{
   { value: "matched", label: "匹配成功" },
   { value: "cancelled", label: "已取消" },
   { value: "error", label: "异常" },
+  { value: "blocked", label: "声望不足" },
 ];
 
 function isMatchDemoState(value: string | null): value is MatchDemoState {
@@ -50,6 +57,26 @@ export default function MatchPage() {
   const view = selectedView ?? routeView;
   const [wantText, setWantText] = useState(demoMatch.want_text);
   const [wantTag, setWantTag] = useState(demoMatch.want_tag);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await ticketApi.submitMatch(wantText, wantTag);
+      setView("waiting");
+    } catch (error) {
+      if (isMatchIneligible(error)) {
+        setView("blocked");
+        return;
+      }
+      setSubmitError(error instanceof Error ? error.message : "提交失败");
+      setView("error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <AppFrame>
@@ -142,10 +169,12 @@ export default function MatchPage() {
               <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <Button
                   type="button"
-                  disabled={!wantText.trim()}
-                  onClick={() => setView("waiting")}
+                  disabled={!wantText.trim() || isSubmitting}
+                  onClick={() => {
+                    void handleSubmit();
+                  }}
                 >
-                  提交问题进入队列
+                  {isSubmitting ? "提交中..." : "提交问题进入队列"}
                 </Button>
               </div>
             </CardContent>
@@ -246,7 +275,7 @@ export default function MatchPage() {
               <AlertCircle className="h-8 w-8 text-rose-500 mx-auto" />
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  网络连接暂时异常
+                  {submitError ?? "网络连接暂时异常"}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   草稿仍在本地，未发生重复提交。
@@ -255,6 +284,38 @@ export default function MatchPage() {
               <Button size="sm" onClick={() => setView("compose")}>
                 重试
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {view === "blocked" && (
+          <Card className="bg-white border-rose-200">
+            <CardContent className="p-8 text-center space-y-4">
+              <AlertCircle className="h-8 w-8 text-rose-500 mx-auto" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  当前不能配对
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  可能是声望低于锁定线，暂时不能进入匹配池。这不是封号。
+                </p>
+              </div>
+              <div className="flex justify-center gap-2">
+                <Link
+                  href="/settings"
+                  className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
+                >
+                  去看声望
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setView("compose")}
+                >
+                  返回修改
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

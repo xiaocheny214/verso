@@ -1,4 +1,4 @@
-import { apiClient, unwrap } from "@/lib/http";
+import { ApiError, apiClient, unwrap } from "@/lib/http";
 import type { StrengthTag } from "@/model/portrait";
 
 export const ticketApi = {
@@ -12,3 +12,11 @@ export const ticketApi = {
   cancelMatch: async () =>
     unwrap(await apiClient.POST("/match/conditions/cancel")),
 };
+
+export function isMatchIneligible(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.code === 409 &&
+    error.message === "当前不能配对"
+  );
+}
