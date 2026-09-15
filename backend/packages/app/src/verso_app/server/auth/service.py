@@ -69,9 +69,13 @@ class AuthService:
             raise BizException("登录已过期，请重试", code=BizCode.BAD_REQUEST)
         try:
             token = self._oauth.exchange_code(code)
+        except Exception:
+            logger.exception("知乎换票失败")
+            raise BizException("知乎授权失败", code=BizCode.BAD_REQUEST) from None
+        try:
             profile = self._oauth.fetch_profile(token.access_token)
         except Exception:
-            logger.exception("知乎换票或取名片失败")
+            logger.exception("知乎取名片失败")
             raise BizException("知乎授权失败", code=BizCode.BAD_REQUEST) from None
         user = self._upsert_user(profile)
         if user.status != UserStatus.ACTIVE:
