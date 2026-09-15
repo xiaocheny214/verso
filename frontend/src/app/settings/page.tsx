@@ -4,7 +4,7 @@ import { useState } from "react";
 import { RefreshCw, CheckCircle2 } from "lucide-react";
 
 import { AppFrame } from "@/components/app-frame";
-import { demoUser } from "@/model/portrait";
+import { useLogout, useSession } from "@/components/use-session";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +14,8 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { displayInitial } from "@/lib/utils";
 
 const sourceLabels = {
   contents: "知乎创作",
@@ -23,10 +24,16 @@ const sourceLabels = {
 } as const;
 
 export default function SettingsPage() {
+  const { user } = useSession();
+  const logout = useLogout();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
-  const portraits = demoUser.portraits ?? [];
+  if (!user) {
+    return null;
+  }
+
+  const portraits = user.portraits ?? [];
   const stable = portraits.find((portrait) => portrait.horizon === "stable");
   const recent = portraits.find((portrait) => portrait.horizon === "recent_7d");
 
@@ -44,7 +51,6 @@ export default function SettingsPage() {
   return (
     <AppFrame>
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Section 1: 登录认证 */}
         <Card className="bg-white border-slate-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-slate-900">
@@ -58,14 +64,17 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10 bg-indigo-600 text-white font-bold">
+                  {user.avatar_url ? (
+                    <AvatarImage src={user.avatar_url} alt={user.name} />
+                  ) : null}
                   <AvatarFallback className="bg-indigo-600 text-white">
-                    林
+                    {displayInitial(user.name)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-900 text-sm">
-                      {demoUser.name}
+                      {user.name}
                     </span>
                     <Badge
                       variant="secondary"
@@ -76,14 +85,22 @@ export default function SettingsPage() {
                     </Badge>
                   </div>
                   <span className="text-xs text-slate-400">
-                    ID: {demoUser.id} · 知乎公开内容授权正常
+                    ID: {user.id} · 知乎公开内容授权正常
                   </span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  重新授权
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={logout.isPending}
+                  onClick={() => {
+                    logout.mutate();
+                  }}
+                >
+                  退出登录
                 </Button>
               </div>
             </div>
@@ -95,7 +112,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Section 2: 生成画像 (直接堆在下面) */}
         <Card className="bg-white border-slate-200">
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
             <div>
@@ -108,6 +124,7 @@ export default function SettingsPage() {
             </div>
 
             <Button
+              type="button"
               size="sm"
               disabled={isSyncing}
               onClick={handleSyncPortrait}
@@ -121,15 +138,14 @@ export default function SettingsPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {syncNotice && (
+            {syncNotice ? (
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>{syncNotice}</span>
               </div>
-            )}
+            ) : null}
 
             <div className="grid md:grid-cols-2 gap-4 pt-1">
-              {/* 长期稳定能力 */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">
@@ -163,7 +179,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* 近 7 天能力 */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">
