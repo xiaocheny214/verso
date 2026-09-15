@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { RefreshCw, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
 import { AppFrame } from "@/components/app-frame";
+import { PortraitPanel } from "@/components/portrait-panel";
 import { ReputationMeter } from "@/components/reputation-meter";
 import { useLogout, useSession } from "@/components/use-session";
 import { reputationApi, reputationQueryKey } from "@/model/reputation";
@@ -21,12 +21,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { displayInitial } from "@/lib/utils";
 
-const sourceLabels = {
-  contents: "知乎创作",
-  favorites: "知乎收藏",
-  self_reported: "本人补充",
-} as const;
-
 export default function SettingsPage() {
   const { user } = useSession();
   const logout = useLogout();
@@ -35,31 +29,15 @@ export default function SettingsPage() {
     queryFn: reputationApi.me,
     retry: false,
   });
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   if (!user) {
     return null;
   }
 
-  const portraits = user.portraits ?? [];
-  const stable = portraits.find((portrait) => portrait.horizon === "stable");
-  const recent = portraits.find((portrait) => portrait.horizon === "recent_7d");
   const reputationError =
     reputationQuery.error instanceof Error
       ? reputationQuery.error.message
       : "声望暂时无法读取";
-
-  async function handleSyncPortrait() {
-    setIsSyncing(true);
-    setSyncNotice(null);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setSyncNotice("画像已根据最新知乎创作重新生成完毕。");
-    } finally {
-      setIsSyncing(false);
-    }
-  }
 
   return (
     <AppFrame>
@@ -147,108 +125,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white border-slate-200">
-          <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-base font-bold text-slate-900">
-                生成画像
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-500">
-                根据知乎内容提炼的能力背叶，用于双向互补匹配。
-              </CardDescription>
-            </div>
-
-            <Button
-              type="button"
-              size="sm"
-              disabled={isSyncing}
-              onClick={handleSyncPortrait}
-              className="gap-1.5"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`}
-              />
-              <span>{isSyncing ? "分析中..." : "重新生成画像"}</span>
-            </Button>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {syncNotice ? (
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span>{syncNotice}</span>
-              </div>
-            ) : null}
-
-            <div className="grid md:grid-cols-2 gap-4 pt-1">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    长期稳定能力
-                  </span>
-                  <span className="text-[11px] text-slate-400">稳定沉淀</span>
-                </div>
-
-                <div className="space-y-2">
-                  {(stable?.strengths ?? []).map((s) => (
-                    <div
-                      key={`${s.tag}-${s.evidence_title}`}
-                      className="p-3 rounded-lg border border-slate-100 bg-slate-50 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant="outline"
-                          className="text-indigo-700 bg-indigo-50 border-indigo-200"
-                        >
-                          {s.tag}
-                        </Badge>
-                        <span className="text-slate-400">
-                          {sourceLabels[s.source]}
-                        </span>
-                      </div>
-                      <p className="text-slate-700 mt-1 font-medium">
-                        {s.evidence_title}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    近 7 天投入
-                  </span>
-                  <span className="text-[11px] text-slate-400">动态更新</span>
-                </div>
-
-                <div className="space-y-2">
-                  {(recent?.strengths ?? []).map((s) => (
-                    <div
-                      key={`${s.tag}-${s.evidence_title}`}
-                      className="p-3 rounded-lg border border-slate-100 bg-slate-50 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant="outline"
-                          className="text-emerald-700 bg-emerald-50 border-emerald-200"
-                        >
-                          {s.tag}
-                        </Badge>
-                        <span className="text-slate-400">
-                          {sourceLabels[s.source]}
-                        </span>
-                      </div>
-                      <p className="text-slate-700 mt-1 font-medium">
-                        {s.evidence_title}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <PortraitPanel user={user} />
       </div>
     </AppFrame>
   );
