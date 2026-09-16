@@ -166,7 +166,12 @@ def test_recent_portrait_reuses_decisions_and_filters_by_time() -> None:
     assert result.tags == [StrengthTag.FITNESS]
 
 
-class _Structured:
+class _Message:
+    def __init__(self, content) -> None:
+        self.content = content
+
+
+class _Model:
     def __init__(self, response) -> None:
         self.response = response
         self.messages = None
@@ -175,17 +180,9 @@ class _Structured:
         self.messages = messages
         if isinstance(self.response, Exception):
             raise self.response
+        if isinstance(self.response, str):
+            return _Message(self.response)
         return self.response
-
-
-class _Model:
-    def __init__(self, response) -> None:
-        self.response = response
-        self.structured = None
-
-    def with_structured_output(self, _schema):
-        self.structured = _Structured(self.response)
-        return self.structured
 
 
 def test_llm_classifier_rejects_missing_or_unknown_evidence_ids() -> None:
@@ -240,7 +237,7 @@ def test_llm_only_receives_authored_content() -> None:
 
     assert [item.evidence_id for item in decisions] == ["post", "saved"]
     assert decisions[1].signal == EvidenceSignal.INTEREST_ONLY
-    payload = json.loads(model.structured.messages[1].content)
+    payload = json.loads(model.messages[1].content)
     assert [item["evidence_id"] for item in payload["evidence"]] == ["post"]
 
 
@@ -263,7 +260,7 @@ def test_llm_input_is_bounded_and_older_content_uses_rules() -> None:
 
     decisions = LlmEvidenceClassifier(model).classify(evidence)
 
-    payload = json.loads(model.structured.messages[1].content)
+    payload = json.loads(model.messages[1].content)
     assert len(payload["evidence"]) == 24
     assert decisions[-1].extractor == "rule-v2"
 
