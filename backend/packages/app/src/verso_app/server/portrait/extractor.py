@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol
+from typing import Protocol, TypeGuard
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -151,8 +151,19 @@ class _LlmDecision(BaseModel):
 
     evidence_id: str
     tags: list[StrengthTag] = Field(default_factory=list, max_length=3)
-    signal: EvidenceSignal
-    confidence: int = Field(ge=0, le=100)
+    signal: EvidenceSignal = Field(
+        default=EvidenceSignal.UNCLEAR,
+        validation_alias=AliasChoices(
+            "signal",
+            "classification",
+            "verdict",
+            "judgment",
+            "judgement",
+            "conclusion",
+            "assessment",
+        ),
+    )
+    confidence: int = Field(default=0, ge=0, le=100)
     reason: str = Field(
         default="模型未提供理由",
         min_length=1,
@@ -173,7 +184,9 @@ class _LlmDecision(BaseModel):
         if not isinstance(value, dict):
             return value
         data = dict(value)
-        data["confidence"] = _coerce_confidence(data.get("confidence"))
+        confidence = _coerce_confidence(data.get("confidence"))
+        data["confidence"] = 0 if confidence in (None, "") else confidence
+        data["signal"] = _coerce_signal(_decision_signal(data))
         if not _decision_reason(data):
             leftover = _first_extra_reason(data)
             data["reason"] = leftover or "模型未提供理由"
@@ -208,6 +221,19 @@ def _coerce_confidence(value: object) -> object:
     return value
 
 
+def _coerce_signal(value: object) -> EvidenceSignal:
+    """Missing or unknown labels are unclear; never infer skill from prose."""
+    if isinstance(value, EvidenceSignal):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return EvidenceSignal.UNCLEAR
+    normalized = value.strip().lower().replace(" ", "_").replace("-", "_")
+    for item in EvidenceSignal:
+        if normalized == item.value:
+            return item
+    return EvidenceSignal.UNCLEAR
+
+
 _REASON_KEYS = (
     "reason",
     "rationale",
@@ -216,17 +242,37 @@ _REASON_KEYS = (
     "justification",
     "analysis",
 )
+_SIGNAL_KEYS = (
+    "signal",
+    "classification",
+    "verdict",
+    "judgment",
+    "judgement",
+    "conclusion",
+    "assessment",
+)
 _RESERVED_DECISION_KEYS = frozenset(
     {
         "evidence_id",
         "tags",
-        "signal",
         "confidence",
         "source",
         "extractor",
         *_REASON_KEYS,
+        *_SIGNAL_KEYS,
     }
 )
+
+
+def _decision_signal(data: dict) -> object:
+    for key in _SIGNAL_KEYS:
+        value = data.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        return value
+    return None
 
 
 def _decision_reason(data: dict) -> str | None:
@@ -273,11 +319,7 @@ def _message_payload(raw: object) -> object:
 
 
 def _parse_llm_batch(raw: object) -> _LlmBatch:
-    """Validate model output as `_LlmBatch` after stripping common provider wrappers.
-
-    `with_structured_output` uses OpenAI `.parse()`, which fails before this helper
-    sees fenced JSON. Callers must invoke the chat model first, then parse here.
-    """
+    """Validate JSON as `_LlmBatch` after stripping common provider wrappers."""
     if isinstance(raw, _LlmBatch):
         return raw
     payload = _message_payload(raw)
@@ -288,18 +330,78 @@ def _parse_llm_batch(raw: object) -> _LlmBatch:
     return _LlmBatch.model_validate(payload)
 
 
+def _is_include_raw_payload(raw: object) -> TypeGuard[dict]:
+    return (
+        isinstance(raw, dict)
+        and "raw" in raw
+        and ("parsed" in raw or "parsing_error" in raw)
+        and "decisions" not in raw
+    )
+
+
+def _parse_structured_batch(raw: object) -> _LlmBatch:
+    """Use json_mode's parsed dict when present; otherwise recover from the raw message."""
+    if not _is_include_raw_payload(raw):
+        return _parse_llm_batch(raw)
+    payload = raw
+    parsed = payload.get("parsed")
+    if parsed is not None:
+        return _parse_llm_batch(parsed)
+    return _parse_llm_batch(payload.get("raw"))
+
+
+_ALLOWED_TAGS = [tag.value for tag in StrengthTag if tag is not StrengthTag.OTHER]
+_LLM_BATCH_JSON_SCHEMA: dict[str, object] = {
+    "title": "LlmBatch",
+    "type": "object",
+    "properties": {
+        "decisions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "evidence_id": {"type": "string"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": _ALLOWED_TAGS},
+                        "maxItems": 3,
+                    },
+                    "signal": {
+                        "type": "string",
+                        "enum": [item.value for item in EvidenceSignal],
+                    },
+                    "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "reason": {"type": "string"},
+                },
+                "required": [
+                    "evidence_id",
+                    "tags",
+                    "signal",
+                    "confidence",
+                    "reason",
+                ],
+            },
+        }
+    },
+    "required": ["decisions"],
+}
+
+
 _SYSTEM_PROMPT = """你是 Verso 的能力证据分类器。你的任务不是描述人格，而是判断每条知乎证据能否证明用户有能力教别人。
 
 约束：
+- 每条 decision 必须包含 evidence_id、tags、signal、confidence、reason。
 - tags 只能从给定闭集选择，最多 3 个；没有合适标签就返回空列表。
+- signal 必须给出，且只能是 demonstrates_skill、interest_only、unclear 三者之一。
 - 本人创作的教程、复盘、解释或实践经验可以是 demonstrates_skill。
 - 提问、表达想学、表达不会，只能是 unclear，不能因为包含领域词就算能力。
 - 收藏别人的内容、关注某个人只证明 interest_only，绝不能单独判为 demonstrates_skill。
 - 证据不足时选择 unclear；不要猜测。
 - confidence 必须是 0 到 100 的整数，不要用 0 到 1 的小数。
-- 每条必须有 reason 字段，一两句中文说明依据。
+- reason 必须是一两句中文说明依据。
 - 每个 evidence_id 必须且只能返回一次。
-- 只输出 JSON。形状为 {"decisions": [...]}，不要用 markdown 代码块包裹。
+- 只输出 JSON，不要用 markdown 代码块包裹。形状必须是：
+{"decisions":[{"evidence_id":"...","tags":["编程"],"signal":"demonstrates_skill","confidence":85,"reason":"..."}]}
 """
 
 
@@ -307,7 +409,11 @@ class LlmEvidenceClassifier:
     version = "llm-v1"
 
     def __init__(self, model: BaseChatModel) -> None:
-        self._model = model
+        self._structured = model.with_structured_output(
+            _LLM_BATCH_JSON_SCHEMA,
+            method="json_mode",
+            include_raw=True,
+        )
         self._rules = RuleEvidenceClassifier()
 
     def classify(self, evidence: list[EvidenceInput]) -> list[EvidenceAssessment]:
@@ -324,7 +430,6 @@ class LlmEvidenceClassifier:
         fixed = self._rules.classify([item for item in evidence if item.id not in delegated_ids])
         if not authored:
             return fixed
-        allowed = [tag.value for tag in StrengthTag if tag is not StrengthTag.OTHER]
         payload = [
             {
                 "evidence_id": item.id,
@@ -335,18 +440,18 @@ class LlmEvidenceClassifier:
             }
             for item in authored
         ]
-        raw = self._model.invoke(
+        raw = self._structured.invoke(
             [
                 SystemMessage(content=_SYSTEM_PROMPT),
                 HumanMessage(
                     content=json.dumps(
-                        {"allowed_tags": allowed, "evidence": payload},
+                        {"allowed_tags": _ALLOWED_TAGS, "evidence": payload},
                         ensure_ascii=False,
                     )
                 ),
             ]
         )
-        parsed = _parse_llm_batch(raw)
+        parsed = _parse_structured_batch(raw)
         expected = delegated_ids
         returned = [item.evidence_id for item in parsed.decisions]
         if len(returned) != len(set(returned)) or set(returned) != expected:
