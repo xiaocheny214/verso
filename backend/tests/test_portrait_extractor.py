@@ -175,6 +175,13 @@ class _Model:
     def __init__(self, response) -> None:
         self.response = response
         self.messages = None
+        self.structured_schema = None
+        self.structured_kwargs = None
+
+    def with_structured_output(self, schema, **kwargs):
+        self.structured_schema = schema
+        self.structured_kwargs = kwargs
+        return self
 
     def invoke(self, messages):
         self.messages = messages
@@ -353,3 +360,179 @@ def test_llm_classifier_defaults_reason_when_model_omits_it() -> None:
 
     assert decisions[0].confidence == 90
     assert decisions[0].reason == "模型未提供理由"
+
+
+def test_missing_signal_stays_on_llm_path_as_unclear() -> None:
+    classifier = FallbackEvidenceClassifier(
+        LlmEvidenceClassifier(
+            _Model(
+                {
+                    "decisions": [
+                        {
+                            "evidence_id": "post",
+                            "tags": ["编程"],
+                            "confidence": 90,
+                            "reason": "实践经验分享。",
+                        }
+                    ]
+                }
+            )
+        ),
+        RuleEvidenceClassifier(),
+    )
+    item = _evidence("post")
+
+    decisions = classifier.classify([item])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].signal == EvidenceSignal.UNCLEAR
+    assert decisions[0].reason == "实践经验分享。"
+    assert aggregate_portrait([item], decisions).tags == []
+
+
+def test_llm_classifier_accepts_signal_alias() -> None:
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "decisions": [
+                    {
+                        "evidence_id": "post",
+                        "tags": ["编程"],
+                        "classification": "demonstrates_skill",
+                        "confidence": 92,
+                        "reason": "包含实践过程",
+                    }
+                ]
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].signal == EvidenceSignal.DEMONSTRATES_SKILL
+
+
+def test_llm_classifier_unknown_signal_becomes_unclear() -> None:
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "decisions": [
+                    {
+                        "evidence_id": "post",
+                        "tags": ["编程"],
+                        "signal": "maybe_skill",
+                        "confidence": 90,
+                        "reason": "实践经验分享。",
+                    }
+                ]
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].signal == EvidenceSignal.UNCLEAR
+
+
+def test_llm_classifier_defaults_missing_confidence() -> None:
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "decisions": [
+                    {
+                        "evidence_id": "post",
+                        "tags": ["编程"],
+                        "signal": "demonstrates_skill",
+                        "reason": "包含实践过程",
+                    }
+                ]
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].confidence == 0
+
+
+def test_llm_classifier_uses_json_mode_schema() -> None:
+    model = _Model(
+        {
+            "decisions": [
+                {
+                    "evidence_id": "post",
+                    "tags": ["编程"],
+                    "signal": "demonstrates_skill",
+                    "confidence": 92,
+                    "reason": "包含实践过程",
+                }
+            ]
+        }
+    )
+
+    LlmEvidenceClassifier(model).classify([_evidence("post")])
+
+    assert isinstance(model.structured_schema, dict)
+    assert model.structured_kwargs["method"] == "json_mode"
+    assert model.structured_kwargs["include_raw"] is True
+    assert model.structured_schema["properties"]["decisions"]["items"]["required"] == [
+        "evidence_id",
+        "tags",
+        "signal",
+        "confidence",
+        "reason",
+    ]
+
+
+def test_llm_classifier_uses_json_mode_parsed_dict() -> None:
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "raw": _Message("ignored"),
+                "parsed": {
+                    "decisions": [
+                        {
+                            "evidence_id": "post",
+                            "tags": ["编程"],
+                            "signal": "demonstrates_skill",
+                            "confidence": 92,
+                            "reason": "包含实践过程",
+                        }
+                    ]
+                },
+                "parsing_error": None,
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].signal == EvidenceSignal.DEMONSTRATES_SKILL
+
+
+def test_llm_classifier_recovers_raw_when_json_mode_parse_fails() -> None:
+    fenced = (
+        "```json\n"
+        '{\n  "decisions": [\n    {\n      "evidence_id": "post",\n'
+        '      "tags": ["编程"],\n      "signal": "demonstrates_skill",\n'
+        '      "confidence": 92,\n      "reason": "包含实践过程"\n    }\n  ]\n}\n'
+        "```"
+    )
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "raw": _Message(fenced),
+                "parsed": None,
+                "parsing_error": ValueError("not json"),
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].tags == (StrengthTag.PROGRAMMING,)
