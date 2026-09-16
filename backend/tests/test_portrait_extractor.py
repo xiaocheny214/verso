@@ -307,3 +307,49 @@ def test_llm_classifier_parses_bare_json_array() -> None:
 
     assert decisions[0].extractor == "llm-v1"
     assert decisions[0].tags == (StrengthTag.PROGRAMMING,)
+
+
+def test_llm_classifier_coerces_fractional_confidence_and_reason_alias() -> None:
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "decisions": [
+                    {
+                        "evidence_id": "post",
+                        "tags": ["编程"],
+                        "signal": "demonstrates_skill",
+                        "confidence": 0.72,
+                        "rationale": "包含实践经验和产品复盘。",
+                    }
+                ]
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].extractor == "llm-v1"
+    assert decisions[0].confidence == 72
+    assert decisions[0].reason == "包含实践经验和产品复盘。"
+
+
+def test_llm_classifier_defaults_reason_when_model_omits_it() -> None:
+    classifier = LlmEvidenceClassifier(
+        _Model(
+            {
+                "decisions": [
+                    {
+                        "evidence_id": "post",
+                        "tags": ["编程"],
+                        "signal": "demonstrates_skill",
+                        "confidence": 0.9,
+                    }
+                ]
+            }
+        )
+    )
+
+    decisions = classifier.classify([_evidence("post")])
+
+    assert decisions[0].confidence == 90
+    assert decisions[0].reason == "模型未提供理由"

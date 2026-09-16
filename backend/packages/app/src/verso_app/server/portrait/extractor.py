@@ -15,7 +15,7 @@ from typing import Protocol
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from verso_app.server.portrait.tagger import tags_from_text
 from verso_common.enums import PortraitSource, StrengthTag
@@ -147,15 +147,103 @@ class RuleEvidenceClassifier:
 
 
 class _LlmDecision(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     evidence_id: str
     tags: list[StrengthTag] = Field(default_factory=list, max_length=3)
     signal: EvidenceSignal
     confidence: int = Field(ge=0, le=100)
-    reason: str = Field(min_length=1, max_length=160)
+    reason: str = Field(
+        default="模型未提供理由",
+        min_length=1,
+        max_length=160,
+        validation_alias=AliasChoices(
+            "reason",
+            "rationale",
+            "explanation",
+            "comment",
+            "justification",
+            "analysis",
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_provider_shape(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        data["confidence"] = _coerce_confidence(data.get("confidence"))
+        if not _decision_reason(data):
+            leftover = _first_extra_reason(data)
+            data["reason"] = leftover or "模型未提供理由"
+        return data
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def clip_reason(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped[:160] if stripped else value
+        return value
 
 
 class _LlmBatch(BaseModel):
     decisions: list[_LlmDecision]
+
+
+def _coerce_confidence(value: object) -> object:
+    """Providers often emit 0-1 floats instead of 0-100 integers."""
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return value
+        value = float(raw) if "." in raw else int(raw)
+    if isinstance(value, float):
+        if 0 <= value <= 1:
+            return round(value * 100)
+        return round(value)
+    return value
+
+
+_REASON_KEYS = (
+    "reason",
+    "rationale",
+    "explanation",
+    "comment",
+    "justification",
+    "analysis",
+)
+_RESERVED_DECISION_KEYS = frozenset(
+    {
+        "evidence_id",
+        "tags",
+        "signal",
+        "confidence",
+        "source",
+        "extractor",
+        *_REASON_KEYS,
+    }
+)
+
+
+def _decision_reason(data: dict) -> str | None:
+    for key in _REASON_KEYS:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _first_extra_reason(data: dict) -> str | None:
+    for key, value in data.items():
+        if key in _RESERVED_DECISION_KEYS:
+            continue
+        if isinstance(value, str) and len(value.strip()) >= 4:
+            return value.strip()
+    return None
 
 
 def _strip_code_fences(text: str) -> str:
@@ -208,7 +296,8 @@ _SYSTEM_PROMPT = """你是 Verso 的能力证据分类器。你的任务不是�
 - 提问、表达想学、表达不会，只能是 unclear，不能因为包含领域词就算能力。
 - 收藏别人的内容、关注某个人只证明 interest_only，绝不能单独判为 demonstrates_skill。
 - 证据不足时选择 unclear；不要猜测。
-- confidence 表示这条证据支持当前 signal 和 tags 的把握，不表示用户人格分数。
+- confidence 必须是 0 到 100 的整数，不要用 0 到 1 的小数。
+- 每条必须有 reason 字段，一两句中文说明依据。
 - 每个 evidence_id 必须且只能返回一次。
 - 只输出 JSON。形状为 {"decisions": [...]}，不要用 markdown 代码块包裹。
 """
