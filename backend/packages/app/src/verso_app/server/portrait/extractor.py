@@ -170,22 +170,34 @@ def _strip_code_fences(text: str) -> str:
     return stripped
 
 
-def _parse_llm_batch(raw: object) -> _LlmBatch:
-    """Accept a Pydantic model, a dict, a JSON string, or a bare JSON array.
+def _message_payload(raw: object) -> object:
+    """Read LangChain message content without using OpenAI native parse."""
+    content = getattr(raw, "content", raw)
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+        return "".join(parts)
+    return content
 
-    Some providers wrap the response in ```json fences or return the decisions
-    array directly instead of the {"decisions": [...]} object.
+
+def _parse_llm_batch(raw: object) -> _LlmBatch:
+    """Validate model output as `_LlmBatch` after stripping common provider wrappers.
+
+    `with_structured_output` uses OpenAI `.parse()`, which fails before this helper
+    sees fenced JSON. Callers must invoke the chat model first, then parse here.
     """
     if isinstance(raw, _LlmBatch):
         return raw
-    if isinstance(raw, str):
-        content = _strip_code_fences(raw)
-        decoded = json.loads(content)
-    else:
-        decoded = raw
-    if isinstance(decoded, list):
-        return _LlmBatch.model_validate({"decisions": decoded})
-    return _LlmBatch.model_validate(decoded)
+    payload = _message_payload(raw)
+    if isinstance(payload, str):
+        payload = json.loads(_strip_code_fences(payload))
+    if isinstance(payload, list):
+        return _LlmBatch.model_validate({"decisions": payload})
+    return _LlmBatch.model_validate(payload)
 
 
 _SYSTEM_PROMPT = """你是 Verso 的能力证据分类器。你的任务不是描述人格，而是判断每条知乎证据能否证明用户有能力教别人。
@@ -198,6 +210,7 @@ _SYSTEM_PROMPT = """你是 Verso 的能力证据分类器。你的任务不是�
 - 证据不足时选择 unclear；不要猜测。
 - confidence 表示这条证据支持当前 signal 和 tags 的把握，不表示用户人格分数。
 - 每个 evidence_id 必须且只能返回一次。
+- 只输出 JSON。形状为 {"decisions": [...]}，不要用 markdown 代码块包裹。
 """
 
 
@@ -205,7 +218,7 @@ class LlmEvidenceClassifier:
     version = "llm-v1"
 
     def __init__(self, model: BaseChatModel) -> None:
-        self._structured = model.with_structured_output(_LlmBatch)
+        self._model = model
         self._rules = RuleEvidenceClassifier()
 
     def classify(self, evidence: list[EvidenceInput]) -> list[EvidenceAssessment]:
@@ -233,7 +246,7 @@ class LlmEvidenceClassifier:
             }
             for item in authored
         ]
-        raw = self._structured.invoke(
+        raw = self._model.invoke(
             [
                 SystemMessage(content=_SYSTEM_PROMPT),
                 HumanMessage(
