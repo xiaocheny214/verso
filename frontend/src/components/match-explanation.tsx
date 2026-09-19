@@ -1,9 +1,24 @@
 import { CheckCircle2 } from "lucide-react";
 import type { MatchCondition } from "@/model/match";
+import type { StrengthTag } from "@/model/portrait";
 
-export function MatchExplanation({ match }: { match: MatchCondition }) {
+interface MatchExplanationProps {
+  match: MatchCondition;
+  myName: string;
+  myStrengths: StrengthTag[];
+}
+
+export function MatchExplanation({
+  match,
+  myName,
+  myStrengths,
+}: MatchExplanationProps) {
   const peer = match.peer;
   if (!peer) return null;
+
+  const myLabel = myName || "我";
+  const myStrengthText =
+    myStrengths.length > 0 ? myStrengths.join(" · ") : "画像生成中";
 
   return (
     <div className="space-y-6" aria-label="匹配成立原因">
@@ -13,14 +28,14 @@ export function MatchExplanation({ match }: { match: MatchCondition }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs">
-                林
+                {myLabel.slice(0, 1)}
               </div>
               <div>
                 <span className="font-bold text-slate-900 text-sm block">
-                  林屿
+                  {myLabel}
                 </span>
                 <span className="text-xs text-slate-400 block">
-                  能提供：互联网 · 编程
+                  能提供：{myStrengthText}
                 </span>
               </div>
             </div>
@@ -38,14 +53,14 @@ export function MatchExplanation({ match }: { match: MatchCondition }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">
-                周
+                {peer.name.slice(0, 1)}
               </div>
               <div>
                 <span className="font-bold text-slate-900 text-sm block">
                   {peer.name}
                 </span>
                 <span className="text-xs text-slate-400 block">
-                  能提供：{(peer.strengths ?? []).join(" · ")}
+                  能提供：{(peer.strengths ?? []).join(" · ") || "画像生成中"}
                 </span>
                 <span className="text-xs text-slate-500 block">
                   声望 {peer.score}
@@ -71,11 +86,15 @@ export function MatchExplanation({ match }: { match: MatchCondition }) {
         <div className="grid sm:grid-cols-2 gap-2 text-indigo-900/80 pt-1">
           <div className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-            <span>林屿的【互联网】能力覆盖周衡的产品需求</span>
+            <span>
+              {myLabel}的【{peer.want_tag}】能力覆盖{peer.name}的求教
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span>周衡的【健身】能力覆盖林屿的训练需求</span>
+            <span>
+              {peer.name}的【{match.want_tag}】能力覆盖{myLabel}的求教
+            </span>
           </div>
         </div>
       </div>
