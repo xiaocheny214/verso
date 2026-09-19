@@ -13,6 +13,11 @@ from verso_app.server.match.compatibility import (
 from verso_common.enums import StrengthTag
 
 
+class _Message:
+    def __init__(self, content) -> None:
+        self.content = content
+
+
 class _Structured:
     def __init__(self, response) -> None:
         self.response = response
@@ -22,6 +27,8 @@ class _Structured:
         self.messages = messages
         if isinstance(self.response, Exception):
             raise self.response
+        if isinstance(self.response, str):
+            return _Message(self.response)
         return self.response
 
 
@@ -29,8 +36,12 @@ class _Model:
     def __init__(self, response) -> None:
         self.response = response
         self.structured = None
+        self.structured_schema = None
+        self.structured_kwargs = None
 
-    def with_structured_output(self, _schema):
+    def with_structured_output(self, schema, **kwargs):
+        self.structured_schema = schema
+        self.structured_kwargs = kwargs
         self.structured = _Structured(self.response)
         return self.structured
 
@@ -130,3 +141,93 @@ def test_llm_input_limits_evidence_and_omits_urls() -> None:
         for direction in payload["directions"]
         for evidence in direction["candidate_evidence"]
     )
+
+
+def test_llm_uses_json_mode_schema() -> None:
+    left = _direction("left")
+    right = _direction("right")
+    model = _Model({"directions": [_supported(left), _supported(right)]})
+
+    LlmPairCompatibilityEvaluator(model).allows((left, right))
+
+    assert isinstance(model.structured_schema, dict)
+    assert model.structured_kwargs["method"] == "json_mode"
+    assert model.structured_kwargs["include_raw"] is True
+    assert model.structured_schema["properties"]["directions"]["items"]["required"] == [
+        "direction_id",
+        "signal",
+        "confidence",
+        "evidence_ids",
+        "reason",
+    ]
+
+
+def test_llm_parses_fenced_json_array() -> None:
+    left = _direction("left")
+    right = _direction("right")
+    fenced = (
+        "```json\n"
+        + json.dumps([_supported(left), _supported(right)], ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+    model = _Model(fenced)
+
+    assert LlmPairCompatibilityEvaluator(model).allows((left, right)) is True
+
+
+def test_llm_parses_fenced_json_object() -> None:
+    left = _direction("left")
+    right = _direction("right")
+    fenced = (
+        "```json\n"
+        + json.dumps(
+            {"directions": [_supported(left), _supported(right)]},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n```"
+    )
+    model = _Model(fenced)
+
+    assert LlmPairCompatibilityEvaluator(model).allows((left, right)) is True
+
+
+def test_llm_parses_bare_json_array() -> None:
+    left = _direction("left")
+    right = _direction("right")
+    model = _Model(json.dumps([_supported(left), _supported(right)], ensure_ascii=False))
+
+    assert LlmPairCompatibilityEvaluator(model).allows((left, right)) is True
+
+
+def test_llm_uses_json_mode_parsed_dict() -> None:
+    left = _direction("left")
+    right = _direction("right")
+    model = _Model(
+        {
+            "raw": _Message("ignored"),
+            "parsed": {"directions": [_supported(left), _supported(right)]},
+            "parsing_error": None,
+        }
+    )
+
+    assert LlmPairCompatibilityEvaluator(model).allows((left, right)) is True
+
+
+def test_llm_recovers_raw_when_json_mode_parse_fails() -> None:
+    left = _direction("left")
+    right = _direction("right")
+    fenced = (
+        "```json\n"
+        + json.dumps([_supported(left), _supported(right)], ensure_ascii=False, indent=2)
+        + "\n```"
+    )
+    model = _Model(
+        {
+            "raw": _Message(fenced),
+            "parsed": None,
+            "parsing_error": ValueError("not json"),
+        }
+    )
+
+    assert LlmPairCompatibilityEvaluator(model).allows((left, right)) is True
