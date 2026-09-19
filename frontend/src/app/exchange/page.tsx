@@ -1,68 +1,518 @@
 "use client";
 
-import { type FormEvent, useState, useSyncExternalStore } from "react";
-import { Clock, Sparkles, Send, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { Suspense, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowRight,
+  Clock,
+  Inbox,
+  RefreshCw,
+  Send,
+} from "lucide-react";
 
 import { AppFrame } from "@/components/app-frame";
-import type { ExchangeMessage } from "@/model/exchange";
-import { demoMessages } from "@/model/exchange";
-import { demoMatch } from "@/model/match";
+import { useSession } from "@/components/use-session";
+import { matchQueryKey, ticketApi } from "@/model/match";
+import {
+  exchangeListQueryKey,
+  exchangeMessageApi,
+  exchangeMessagesQueryKey,
+  exchangeQueryKey,
+  exchangeSessionApi,
+} from "@/model/exchange";
+import type { Exchange, ExchangeMessage } from "@/model/exchange";
+import { ApiError } from "@/lib/http";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "cn";
 
-type ExchangeDemoState = "open" | "empty" | "closed" | "error";
+const MESSAGE_MAX_LENGTH = 2000;
 
-const exchangeStates: Array<{
-  value: ExchangeDemoState;
-  label: string;
-}> = [
-  { value: "open", label: "进行中" },
-  { value: "empty", label: "等待回答" },
-  { value: "closed", label: "已关闭" },
-  { value: "error", label: "异常" },
-];
-
-function isExchangeDemoState(value: string | null): value is ExchangeDemoState {
-  return exchangeStates.some((state) => state.value === value);
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-function subscribeToStaticRoute() {
-  return () => undefined;
+function formatRemaining(closesAt: string): string {
+  const ms = new Date(closesAt).getTime() - Date.now();
+  if (Number.isNaN(ms)) return "";
+  if (ms <= 0) return "已到期";
+  const totalMinutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `剩余 ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-function getExchangeRouteState(): ExchangeDemoState {
-  const requested = new URLSearchParams(window.location.search).get("state");
-  return isExchangeDemoState(requested) ? requested : "open";
+function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 404;
 }
 
-export default function ExchangePage() {
-  const [messages, setMessages] = useState<ExchangeMessage[]>(demoMessages);
+function peerIdOf(exchange: Exchange, myId: string): string | null {
+  if (exchange.user_a_id === myId) return exchange.user_b_id;
+  if (exchange.user_b_id === myId) return exchange.user_a_id;
+  return null;
+}
+
+function peerStrengthsLabel(strengths: string[] | undefined): string {
+  if (!strengths || strengths.length === 0) return "画像生成中";
+  return strengths.join(" · ");
+}
+
+function ExchangePageContent() {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const session = useSession();
+  const myId = session.user?.id ?? null;
+
   const [draft, setDraft] = useState("");
-  const routeView = useSyncExternalStore<ExchangeDemoState>(
-    subscribeToStaticRoute,
-    getExchangeRouteState,
-    () => "open",
-  );
-  const [selectedView, setView] = useState<ExchangeDemoState | null>(null);
-  const view = selectedView ?? routeView;
-  const peer = demoMatch.peer!;
-  const visibleMessages = view === "empty" ? [] : messages;
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const pairsQuery = useQuery({
+    queryKey: exchangeListQueryKey,
+    queryFn: exchangeSessionApi.exchanges,
+    retry: false,
+  });
+
+  const pairs = pairsQuery.data ?? [];
+  const urlExchangeId = searchParams.get("pair_id");
+  const fallbackExchangeId = pairs.length === 1 ? pairs[0].exchange_id : null;
+  const exchangeId = urlExchangeId ?? fallbackExchangeId;
+  const selectedPair = pairs.find((pair) => pair.exchange_id === exchangeId);
+
+  const exchangeQuery = useQuery({
+    queryKey: exchangeQueryKey(exchangeId ?? ""),
+    queryFn: () => exchangeSessionApi.exchange(exchangeId as string),
+    enabled: exchangeId != null,
+    retry: false,
+  });
+
+  const messagesQuery = useQuery({
+    queryKey: exchangeMessagesQueryKey(exchangeId ?? ""),
+    queryFn: () => exchangeMessageApi.messages(exchangeId as string),
+    enabled: exchangeId != null,
+    retry: false,
+  });
+
+  const matchQuery = useQuery({
+    queryKey: matchQueryKey,
+    queryFn: ticketApi.currentMatch,
+    retry: false,
+  });
+
+  const exchange = exchangeQuery.data ?? null;
+  const isOpen = exchange?.status === "open";
+  const peerId = exchange && myId ? peerIdOf(exchange, myId) : null;
+  const peerName = selectedPair?.peer_name ?? "对方";
+  const peerStrengths = selectedPair?.peer_strengths ?? [];
+  const myWantText =
+    matchQuery.data?.pair_id != null && matchQuery.data.pair_id === exchangeId
+      ? matchQuery.data.want_text
+      : null;
+
+  const messages = messagesQuery.data ?? [];
+  const peerMessages = messages.filter((m) => m.sender_id === peerId);
+  const myMessages = myId ? messages.filter((m) => m.sender_id === myId) : [];
+
+  const exchangeNotFound =
+    exchangeQuery.isError && isNotFound(exchangeQuery.error);
+  const exchangeErrorTitle = exchangeNotFound
+    ? "没有这对关系"
+    : "这一对暂时无法读取";
+  let exchangeErrorDetail = "网络连接暂时异常";
+  if (exchangeNotFound) {
+    exchangeErrorDetail =
+      "它可能不属于你，或已经不存在。回到列表选择你的对局。";
+  } else if (exchangeQuery.error instanceof Error) {
+    exchangeErrorDetail = exchangeQuery.error.message;
+  }
+
+  const sendMutation = useMutation({
+    mutationFn: (text: string) =>
+      exchangeMessageApi.sendMessage(exchangeId as string, text),
+    onSuccess: (message) => {
+      setSendError(null);
+      setDraft("");
+      queryClient.setQueryData<ExchangeMessage[]>(
+        exchangeMessagesQueryKey(exchangeId as string),
+        (current) => [...(current ?? []), message],
+      );
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === 409) {
+        setSendError("这对已经结束，不能再留言");
+        void queryClient.invalidateQueries({
+          queryKey: exchangeQueryKey(exchangeId as string),
+        });
+        return;
+      }
+      setSendError(error instanceof Error ? error.message : "发送失败");
+    },
+  });
+
+  const closeMutation = useMutation({
+    mutationFn: () => exchangeSessionApi.closeExchange(exchangeId as string),
+    onSuccess: (closed) => {
+      queryClient.setQueryData(exchangeQueryKey(exchangeId as string), closed);
+    },
+  });
 
   function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
-    const message: ExchangeMessage = {
-      id: `demo-${messages.length + 1}`,
-      exchange_id: demoMatch.pair_id!,
-      sender_id: "user-linyu",
-      text,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((current) => [...current, message]);
-    setDraft("");
+    if (!text || exchangeId == null) return;
+    sendMutation.mutate(text);
+  }
+
+  function openPair(id: string) {
+    router.replace(`/exchange?pair_id=${encodeURIComponent(id)}`);
+  }
+
+  function refresh() {
+    void exchangeQuery.refetch();
+    void messagesQuery.refetch();
+  }
+
+  function renderWorkbench() {
+    if (exchangeId == null) {
+      return (
+        <Card className="bg-white border-slate-200">
+          <CardContent className="p-8 text-center space-y-2">
+            <p className="text-sm font-bold text-slate-900">选择一对互答</p>
+            <p className="text-xs text-slate-500">
+              从左侧列表选择要查看或继续的对局。
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (exchangeQuery.isPending) {
+      return (
+        <Card className="bg-white border-slate-200">
+          <CardContent className="p-8 text-center space-y-3">
+            <RefreshCw className="h-7 w-7 animate-spin text-indigo-600 mx-auto" />
+            <p className="text-sm text-slate-500">正在打开这一对…</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (exchangeQuery.isError) {
+      return (
+        <Card className="bg-white border-rose-200">
+          <CardContent className="p-8 text-center space-y-4">
+            <AlertCircle className="h-8 w-8 text-rose-500 mx-auto" />
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                {exchangeErrorTitle}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {exchangeErrorDetail}
+              </p>
+            </div>
+            <div className="flex justify-center gap-2">
+              {urlExchangeId != null && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.replace("/exchange")}
+                >
+                  查看我的对局
+                </Button>
+              )}
+              <Button size="sm" onClick={refresh}>
+                重试
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (!exchange) {
+      return null;
+    }
+
+    return (
+      <>
+        {/* Session Top Bar */}
+        <Card className="bg-white border-slate-200">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-900">
+                  与 {peerName} 的互答对局
+                </span>
+                <Badge
+                  variant="secondary"
+                  className={
+                    isOpen
+                      ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                      : "text-slate-600 bg-slate-100"
+                  }
+                >
+                  {isOpen ? "24h 互答中" : "已归档"}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                <span className="font-semibold">
+                  {isOpen
+                    ? formatRemaining(exchange.closes_at)
+                    : `结束于 ${formatDateTime(exchange.closed_at ?? exchange.closes_at)}`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1 pl-3 border-l border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  disabled={messagesQuery.isFetching}
+                  onClick={refresh}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3 w-3",
+                      messagesQuery.isFetching && "animate-spin",
+                    )}
+                  />
+                  <span>刷新留言</span>
+                </Button>
+                {isOpen && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    disabled={closeMutation.isPending}
+                    onClick={() => closeMutation.mutate()}
+                  >
+                    {closeMutation.isPending ? "关闭中…" : "提前结束"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dual Lanes */}
+        <div className="grid md:grid-cols-2 gap-6 items-start">
+          {/* Peer's Answer to Me */}
+          <Card className="bg-white border-slate-200 flex flex-col min-h-[440px]">
+            <CardHeader className="pb-3 border-b border-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800">
+                  {peerName} 正在回答你的问题
+                </span>
+                {peerStrengths.length > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="text-emerald-700 bg-emerald-50 border-emerald-200 text-[10px]"
+                  >
+                    {peerStrengths[0]}
+                  </Badge>
+                )}
+              </div>
+              <div className="text-xs text-slate-900 font-semibold bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                {myWantText ??
+                  "本轮匹配窗口已结束，你的问题原文暂不可见，仍可回看下方留言。"}
+              </div>
+            </CardHeader>
+
+            <CardContent className="py-4 space-y-3 flex-1 overflow-y-auto">
+              {peerMessages.map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-100 text-xs text-slate-800 leading-relaxed space-y-1.5"
+                >
+                  <p>{m.text}</p>
+                  <div className="text-[10px] text-emerald-700 font-medium">
+                    {peerName} · {formatDateTime(m.created_at)}
+                  </div>
+                </div>
+              ))}
+
+              {peerMessages.length === 0 && (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  {messagesQuery.isFetching
+                    ? "正在拉取留言…"
+                    : "对方还未留言。稍后回来刷新即可看到。"}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* My Answer to Peer */}
+          <Card className="bg-white border-slate-200 flex flex-col min-h-[440px]">
+            <CardHeader className="pb-3 border-b border-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800">
+                  你正在回答 {peerName} 的问题
+                </span>
+              </div>
+              <div className="text-xs text-slate-900 font-semibold bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                {selectedPair?.peer_want_text ?? "对方的问题暂不可见。"}
+              </div>
+            </CardHeader>
+
+            <CardContent className="py-4 space-y-3 flex-1 overflow-y-auto">
+              {myMessages.map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3.5 rounded-lg bg-indigo-50/60 border border-indigo-100 text-xs text-slate-800 leading-relaxed space-y-1.5"
+                >
+                  <p>{m.text}</p>
+                  <div className="text-[10px] text-indigo-700 font-medium">
+                    你 · {formatDateTime(m.created_at)}
+                  </div>
+                </div>
+              ))}
+
+              {myMessages.length === 0 && (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  留下你的第一条针对性建议。
+                </div>
+              )}
+            </CardContent>
+
+            {isOpen ? (
+              <form
+                onSubmit={send}
+                className="p-4 pt-3 border-t border-slate-100 space-y-2.5"
+              >
+                <label
+                  htmlFor="answer"
+                  className="block text-xs font-bold text-slate-700"
+                >
+                  继续补充你的回答:
+                </label>
+                <Textarea
+                  id="answer"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="提供一个具体、可执行的回答……"
+                  maxLength={MESSAGE_MAX_LENGTH}
+                  rows={3}
+                  className="resize-none text-xs"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">
+                    {draft.length} / {MESSAGE_MAX_LENGTH} 字
+                  </span>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!draft.trim() || sendMutation.isPending}
+                    className="gap-1.5"
+                  >
+                    <Send className="h-3 w-3" />
+                    <span>
+                      {sendMutation.isPending ? "发送中…" : "发送回答"}
+                    </span>
+                  </Button>
+                </div>
+                {sendError && (
+                  <p className="text-xs text-rose-600" role="alert">
+                    {sendError}
+                  </p>
+                )}
+              </form>
+            ) : (
+              <div className="p-4 pt-3 border-t border-slate-100 text-center space-y-1 text-xs">
+                <span className="font-bold text-slate-600 block">
+                  本轮对局已归档
+                </span>
+                <p className="text-slate-400 text-[11px]">
+                  {sendError ?? "答案已保留。若需新的解答，请发起新匹配。"}
+                </p>
+              </div>
+            )}
+          </Card>
+        </div>
+      </>
+    );
+  }
+
+  if (pairsQuery.isPending) {
+    return (
+      <AppFrame>
+        <Card className="bg-white border-slate-200">
+          <CardContent className="p-8 text-center space-y-3">
+            <RefreshCw className="h-7 w-7 animate-spin text-indigo-600 mx-auto" />
+            <p className="text-sm text-slate-500">正在读取互答对局…</p>
+          </CardContent>
+        </Card>
+      </AppFrame>
+    );
+  }
+
+  if (pairsQuery.isError) {
+    return (
+      <AppFrame>
+        <Card className="bg-white border-rose-200">
+          <CardContent className="p-8 text-center space-y-4">
+            <AlertCircle className="h-8 w-8 text-rose-500 mx-auto" />
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                互答对局暂时无法读取
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {pairsQuery.error instanceof Error
+                  ? pairsQuery.error.message
+                  : "网络连接暂时异常"}
+              </p>
+            </div>
+            <Button size="sm" onClick={() => void pairsQuery.refetch()}>
+              重试
+            </Button>
+          </CardContent>
+        </Card>
+      </AppFrame>
+    );
+  }
+
+  if (pairs.length === 0) {
+    return (
+      <AppFrame>
+        <Card className="bg-white border-slate-200">
+          <CardContent className="p-10 text-center space-y-4">
+            <Inbox className="h-9 w-9 text-slate-300 mx-auto" />
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                还没有互答对局
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                发起一次互补匹配，配上后系统会自动开启 24 小时互答窗口。
+              </p>
+            </div>
+            <Link
+              href="/match"
+              className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
+            >
+              <span>去发起匹配</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
+      </AppFrame>
+    );
   }
 
   return (
@@ -74,254 +524,81 @@ export default function ExchangePage() {
           <aside className="lg:col-span-1 space-y-3">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                对局列表 (1)
+                对局列表 ({pairs.length})
               </span>
             </div>
 
-            <Card className="bg-white border-2 border-indigo-600 shadow-xs cursor-pointer">
-              <CardContent className="p-4 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs">
-                      周
+            {pairs.map((pair) => {
+              const active = pair.exchange_id === exchangeId;
+              return (
+                <Card
+                  key={pair.exchange_id}
+                  className={cn(
+                    "bg-white shadow-xs cursor-pointer transition-colors",
+                    active
+                      ? "border-2 border-indigo-600"
+                      : "border-slate-200 hover:border-indigo-200",
+                  )}
+                  onClick={() => openPair(pair.exchange_id)}
+                >
+                  <CardContent className="p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Avatar size="sm">
+                          {pair.peer_avatar_url ? (
+                            <AvatarImage
+                              src={pair.peer_avatar_url}
+                              alt={pair.peer_name}
+                            />
+                          ) : null}
+                          <AvatarFallback>
+                            {pair.peer_name.slice(0, 1)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">
+                            {pair.peer_name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            {peerStrengthsLabel(pair.peer_strengths)}
+                          </span>
+                        </div>
+                      </div>
+                      {active && (
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      )}
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 block">
-                        周衡
-                      </span>
-                      <span className="text-[10px] text-slate-400 block">
-                        健身 ⇄ 互联网
-                      </span>
+
+                    <div className="text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded">
+                      求教：{pair.peer_want_text}
                     </div>
-                  </div>
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                </div>
 
-                <div className="text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded">
-                  求教：{demoMatch.want_text}
-                </div>
-
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
-                  <span>{view === "closed" ? "已结束" : "剩余 21:34"}</span>
-                  <span className="text-indigo-600 font-semibold">
-                    当前对局
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                      <span>{pair.exchange_id.slice(0, 8)}</span>
+                      {active && (
+                        <span className="text-indigo-600 font-semibold">
+                          当前对局
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </aside>
 
           {/* Right: MAIN WORKBENCH */}
-          <div className="lg:col-span-3 space-y-6">
-            {/* Session Top Bar with State Preview */}
-            <Card className="bg-white border-slate-200">
-              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-900">
-                      与 {peer.name} 的互答对局
-                    </span>
-                    <Badge
-                      variant="secondary"
-                      className={
-                        view === "closed"
-                          ? "text-slate-600 bg-slate-100"
-                          : "text-emerald-700 bg-emerald-50 border-emerald-200"
-                      }
-                    >
-                      {view === "closed" ? "已归档" : "24h 互答中"}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <Clock className="h-3.5 w-3.5 text-indigo-600" />
-                    <span className="font-semibold">
-                      {view === "closed" ? "已归档" : "剩余 21:34"}
-                    </span>
-                  </div>
-
-                  {/* State switcher */}
-                  <div className="flex items-center gap-1 pl-3 border-l border-slate-200">
-                    {exchangeStates.map((state) => (
-                      <Button
-                        key={state.value}
-                        type="button"
-                        variant={view === state.value ? "default" : "outline"}
-                        size="xs"
-                        onClick={() => setView(state.value)}
-                        className="text-[11px] h-6 px-2"
-                      >
-                        {state.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Error view */}
-            {view === "error" && (
-              <Card className="bg-white border-rose-200">
-                <CardContent className="p-8 text-center space-y-3">
-                  <AlertCircle className="h-7 w-7 text-rose-500 mx-auto" />
-                  <h3 className="text-sm font-bold text-slate-900">
-                    网络连接中断
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    本地草稿未丢失，网络恢复后可继续作答。
-                  </p>
-                  <Button size="sm" onClick={() => setView("open")}>
-                    重新载入
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Dual Lanes */}
-            {view !== "error" && (
-              <div className="grid md:grid-cols-2 gap-6 items-start">
-                {/* Peer's Answer to Me */}
-                <Card className="bg-white border-slate-200 flex flex-col min-h-[440px]">
-                  <CardHeader className="pb-3 border-b border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
-                        {peer.name} 正在回答你的问题
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="text-emerald-700 bg-emerald-50 border-emerald-200 text-[10px]"
-                      >
-                        健身
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-slate-900 font-semibold bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                      {demoMatch.want_text}
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="py-4 space-y-3 flex-1 overflow-y-auto">
-                    {visibleMessages
-                      .filter((m) => m.sender_id === peer.id)
-                      .map((m) => (
-                        <div
-                          key={m.id}
-                          className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-100 text-xs text-slate-800 leading-relaxed space-y-1.5"
-                        >
-                          <p>{m.text}</p>
-                          <div className="text-[10px] text-emerald-700 font-medium">
-                            {peer.name} · 今天 19:08
-                          </div>
-                        </div>
-                      ))}
-
-                    {view === "empty" && (
-                      <div className="py-12 text-center text-xs text-slate-400">
-                        对方正在组织答案，请稍候。
-                      </div>
-                    )}
-                  </CardContent>
-
-                  <div className="p-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                    <span>收到完整方案后，由系统 AI 提供质量复核</span>
-                  </div>
-                </Card>
-
-                {/* My Answer to Peer */}
-                <Card className="bg-white border-slate-200 flex flex-col min-h-[440px]">
-                  <CardHeader className="pb-3 border-b border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
-                        你正在回答 {peer.name} 的问题
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="text-indigo-700 bg-indigo-50 border-indigo-200 text-[10px]"
-                      >
-                        互联网
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-slate-900 font-semibold bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                      {peer.want_text}
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="py-4 space-y-3 flex-1 overflow-y-auto">
-                    {visibleMessages
-                      .filter((m) => m.sender_id === "user-linyu")
-                      .map((m) => (
-                        <div
-                          key={m.id}
-                          className="p-3.5 rounded-lg bg-indigo-50/60 border border-indigo-100 text-xs text-slate-800 leading-relaxed space-y-1.5"
-                        >
-                          <p>{m.text}</p>
-                          <div className="text-[10px] text-indigo-700 font-medium">
-                            你 ·{" "}
-                            {m.id.startsWith("demo-") ? "刚刚" : "今天 19:24"}
-                          </div>
-                        </div>
-                      ))}
-
-                    {view === "empty" && (
-                      <div className="py-12 text-center text-xs text-slate-400">
-                        留下你的第一条针对性建议。
-                      </div>
-                    )}
-                  </CardContent>
-
-                  {view === "closed" ? (
-                    <div className="p-4 pt-3 border-t border-slate-100 text-center space-y-1 text-xs">
-                      <span className="font-bold text-slate-600 block">
-                        本轮对局已归档
-                      </span>
-                      <p className="text-slate-400 text-[11px]">
-                        答案已保留。若需新的解答，请发起新匹配。
-                      </p>
-                    </div>
-                  ) : (
-                    <form
-                      onSubmit={send}
-                      className="p-4 pt-3 border-t border-slate-100 space-y-2.5"
-                    >
-                      <label
-                        htmlFor="answer"
-                        className="block text-xs font-bold text-slate-700"
-                      >
-                        继续补充你的回答:
-                      </label>
-                      <Textarea
-                        id="answer"
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        placeholder="提供一个具体、可执行的回答……"
-                        maxLength={2000}
-                        rows={3}
-                        className="resize-none text-xs"
-                      />
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400">
-                          {draft.length} / 2000 字
-                        </span>
-                        <Button
-                          type="submit"
-                          size="sm"
-                          disabled={!draft.trim()}
-                          className="gap-1.5"
-                        >
-                          <Send className="h-3 w-3" />
-                          <span>发送回答</span>
-                        </Button>
-                      </div>
-                    </form>
-                  )}
-                </Card>
-              </div>
-            )}
-          </div>
+          <div className="lg:col-span-3 space-y-6">{renderWorkbench()}</div>
         </div>
       </div>
     </AppFrame>
+  );
+}
+
+export default function ExchangePage() {
+  return (
+    <Suspense fallback={null}>
+      <ExchangePageContent />
+    </Suspense>
   );
 }

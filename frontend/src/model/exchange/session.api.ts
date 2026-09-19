@@ -1,5 +1,13 @@
 import { apiClient, unwrap } from "@/lib/http";
 
+export const exchangeListQueryKey = ["exchanges", "mine"] as const;
+
+export const exchangeQueryKey = (exchangeId: string) =>
+  ["exchanges", exchangeId] as const;
+
+export const exchangeMessagesQueryKey = (exchangeId: string) =>
+  ["exchanges", exchangeId, "messages"] as const;
+
 export const exchangeSessionApi = {
   exchange: async (id: string) =>
     unwrap(
