@@ -6,7 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
+from typing import Protocol, TypeGuard
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -69,6 +69,100 @@ class _LlmPairDecision(BaseModel):
     directions: list[_LlmDirectionDecision] = Field(min_length=2, max_length=2)
 
 
+def _strip_code_fences(text: str) -> str:
+    """Remove ```json ...``` style fences and surrounding prose from model output."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        first_newline = stripped.find("\n")
+        body = stripped[first_newline + 1 :] if first_newline != -1 else stripped[3:]
+        if body.rstrip().endswith("```"):
+            body = body.rstrip()[:-3]
+        return body.strip()
+    return stripped
+
+
+def _message_payload(raw: object) -> object:
+    """Read LangChain message content without using OpenAI native parse."""
+    content = getattr(raw, "content", raw)
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+        return "".join(parts)
+    return content
+
+
+def _parse_llm_pair(raw: object) -> _LlmPairDecision:
+    """Validate JSON as `_LlmPairDecision` after stripping common provider wrappers."""
+    if isinstance(raw, _LlmPairDecision):
+        return raw
+    payload = _message_payload(raw)
+    if isinstance(payload, str):
+        payload = json.loads(_strip_code_fences(payload))
+    if isinstance(payload, list):
+        return _LlmPairDecision.model_validate({"directions": payload})
+    return _LlmPairDecision.model_validate(payload)
+
+
+def _is_include_raw_payload(raw: object) -> TypeGuard[dict]:
+    return (
+        isinstance(raw, dict)
+        and "raw" in raw
+        and ("parsed" in raw or "parsing_error" in raw)
+        and "directions" not in raw
+    )
+
+
+def _parse_structured_pair(raw: object) -> _LlmPairDecision:
+    """Use json_mode's parsed dict when present; otherwise recover from the raw message."""
+    if not _is_include_raw_payload(raw):
+        return _parse_llm_pair(raw)
+    parsed = raw.get("parsed")
+    if parsed is not None:
+        return _parse_llm_pair(parsed)
+    return _parse_llm_pair(raw.get("raw"))
+
+
+_LLM_PAIR_JSON_SCHEMA: dict[str, object] = {
+    "title": "LlmPairDecision",
+    "type": "object",
+    "properties": {
+        "directions": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "direction_id": {"type": "string"},
+                    "signal": {
+                        "type": "string",
+                        "enum": [item.value for item in CompatibilitySignal],
+                    },
+                    "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "evidence_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "maxItems": 3,
+                    },
+                    "reason": {"type": "string"},
+                },
+                "required": [
+                    "direction_id",
+                    "signal",
+                    "confidence",
+                    "evidence_ids",
+                    "reason",
+                ],
+            },
+        }
+    },
+    "required": ["directions"],
+}
+
 _SYSTEM_PROMPT = """你是 Verso 的双向匹配证据校验器。你只判断候选人的已有实践证据，能否支持他回答这个具体问题。
 
 逐个方向判断：
@@ -76,13 +170,18 @@ _SYSTEM_PROMPT = """你是 Verso 的双向匹配证据校验器。你只判断�
 - unsupported：证据属于同一个大类，但具体经历不相关；或者问题只是搜索/AI即可直接回答的通用事实。
 - unclear：问题太宽泛、缺少背景，或证据不足以判断。
 
-不得从大类标签推测候选人会做未被证据支持的事情。supported 必须引用至少一个输入中的 evidence_id；不得引用未知证据。每个 direction_id 必须且只能返回一次。不要回答用户的问题，只输出结构化判断。
+不得从大类标签推测候选人会做未被证据支持的事情。supported 必须引用至少一个输入中的 evidence_id；不得引用未知证据。每个 direction_id 必须且只能返回一次。不要回答用户的问题，只输出 JSON，不要用 markdown 代码块包裹。形状必须是：
+{"directions":[{"direction_id":"...","signal":"supported","confidence":85,"evidence_ids":["..."],"reason":"..."},{"direction_id":"...","signal":"supported","confidence":85,"evidence_ids":["..."],"reason":"..."}]}
 """
 
 
 class LlmPairCompatibilityEvaluator:
     def __init__(self, model: BaseChatModel) -> None:
-        self._structured = model.with_structured_output(_LlmPairDecision)
+        self._structured = model.with_structured_output(
+            _LLM_PAIR_JSON_SCHEMA,
+            method="json_mode",
+            include_raw=True,
+        )
 
     def allows(self, directions: tuple[DirectionInput, DirectionInput]) -> bool:
         bounded = tuple(
@@ -117,7 +216,7 @@ class LlmPairCompatibilityEvaluator:
                 HumanMessage(content=json.dumps({"directions": payload}, ensure_ascii=False)),
             ]
         )
-        parsed = raw if isinstance(raw, _LlmPairDecision) else _LlmPairDecision.model_validate(raw)
+        parsed = _parse_structured_pair(raw)
         return _both_directions_supported(bounded, parsed.directions)
 
 
