@@ -1,6 +1,10 @@
 import { ApiError, apiClient, unwrap } from "@/lib/http";
 import type { StrengthTag } from "@/model/portrait";
 
+import type { MatchCondition } from "./ticket.type";
+
+export const matchQueryKey = ["match", "current"] as const;
+
 export const ticketApi = {
   submitMatch: async (wantText: string, wantTag: StrengthTag) =>
     unwrap(
@@ -8,7 +12,16 @@ export const ticketApi = {
         body: { want_text: wantText, want_tag: wantTag },
       }),
     ),
-  currentMatch: async () => unwrap(await apiClient.GET("/match/conditions/me")),
+  currentMatch: async (): Promise<MatchCondition | null> => {
+    try {
+      return unwrap(await apiClient.GET("/match/conditions/me"));
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
   cancelMatch: async () =>
     unwrap(await apiClient.POST("/match/conditions/cancel")),
 };
