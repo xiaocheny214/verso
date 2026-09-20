@@ -224,6 +224,34 @@ class ArchiveService:
             ).all()
         )
 
+    def list_queue(self, db: Session, *, user_id: uuid.UUID) -> list[UserArticle]:
+        """工作台待办：pending 与 failed，失败排前面。"""
+        rows = [
+            row
+            for row in self.list_by_user(db, user_id=user_id)
+            if row.status != ArticleStatus.READY
+        ]
+        rows.sort(
+            key=lambda row: (
+                0 if row.status == ArticleStatus.FAILED else 1,
+                row.updated_at or row.created_at,
+            )
+        )
+        return rows
+
+    def queue_counts(self, db: Session, *, user_id: uuid.UUID) -> tuple[int, int, int]:
+        pending = 0
+        failed = 0
+        ready = 0
+        for row in self.list_by_user(db, user_id=user_id):
+            if row.status == ArticleStatus.READY:
+                ready += 1
+            elif row.status == ArticleStatus.FAILED:
+                failed += 1
+            else:
+                pending += 1
+        return pending, failed, ready
+
     def retry_failed_fetch(self, db: Session, *, user_id: uuid.UUID) -> None:
         """用户在自己的浏览器登录知乎之后，再点重试。服务器仍只走 HTTP，不开浏览器。"""
         rows = self.list_failed_fetch(db, user_id=user_id)
