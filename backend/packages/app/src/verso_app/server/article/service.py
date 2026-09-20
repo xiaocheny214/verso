@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -12,9 +11,7 @@ from sqlalchemy.orm import Session
 
 from verso_app.server.article.keys import article_object_key, content_sha256
 from verso_app.server.article.models import UserArticle
-from verso_app.server.fetch.errors import FetchError
 from verso_app.server.fetch.html import html_to_markdown
-from verso_app.server.fetch.service import FetchService
 from verso_app.server.fetch.urls import archivable_from_content, parse_archivable_url
 from verso_common.enums import ArticleStatus, BizCode
 from verso_common.exceptions import BizException
@@ -22,24 +19,20 @@ from verso_framework.config.storage import get_storage_settings
 from verso_framework.providers.zhihu import ZhihuContent
 from verso_framework.storage import ObjectStore, ObjectStoreError, get_object_store
 
-logger = logging.getLogger("verso.article")
-
 
 class ArchiveService:
-    """上传、读取、删除、查询已归档文章。抓取走独立 fetch 模块。"""
+    """上传、读取、删除、查询已归档文章。正文由用户在知乎页回传。"""
 
     def __init__(
         self,
         store: ObjectStore | None = None,
         *,
         key_prefix: str | None = None,
-        fetch: FetchService | None = None,
     ) -> None:
         self._store = store if store is not None else get_object_store()
         self._key_prefix = (
             key_prefix if key_prefix is not None else get_storage_settings().key_prefix
         )
-        self._fetch = fetch
 
     def put_markdown(
         self,
@@ -99,46 +92,42 @@ class ArchiveService:
         db.flush()
         return row
 
-    def ingest_listed_contents(
+    def enqueue_listed_contents(
         self,
         db: Session,
         *,
         user_id: uuid.UUID,
         contents: Sequence[ZhihuContent],
     ) -> None:
-        """对创作列表里的专栏/回答抓 Markdown 并上传。单条失败不中断。"""
-        if self._fetch is None:
-            return
+        """登录热路径只登记待抓，不打知乎匿名接口。"""
         for item in contents:
             target = archivable_from_content(url=item.url, content_type=item.content_type)
             if target is None:
                 continue
-            try:
-                doc = self._fetch.fetch_target(target)
-            except FetchError:
-                logger.warning("抓取失败，跳过 url=%s", item.url, exc_info=True)
-                self.mark_failed(
-                    db,
-                    user_id=user_id,
-                    source_url=target.source_url,
-                    content_type=target.kind,
-                    title=item.title,
-                    summary=item.summary or None,
-                    error_class="fetch",
-                )
+            row = self.get_by_source(db, user_id=user_id, source_url=target.source_url)
+            if row is None:
+                row = self._row_for_target(db, user_id=user_id, target=target)
+            if row is not None and row.status == ArticleStatus.READY:
                 continue
-            try:
-                self.put_markdown(
-                    db,
-                    user_id=user_id,
-                    source_url=target.source_url,
-                    data=doc.markdown.encode("utf-8"),
-                    content_type=target.kind,
-                    title=item.title or doc.title,
-                    summary=item.summary or None,
+            if row is None:
+                db.add(
+                    UserArticle(
+                        user_id=user_id,
+                        source_url=target.source_url,
+                        content_type=target.kind,
+                        title=item.title,
+                        summary=item.summary or None,
+                        object_key=article_object_key(
+                            user_id, target.source_url, prefix=self._key_prefix
+                        ),
+                        status=ArticleStatus.PENDING,
+                        error_class=None,
+                    )
                 )
-            except ObjectStoreError:
-                logger.warning("上传失败，跳过 url=%s", item.url, exc_info=True)
+            else:
+                row.title = item.title or row.title
+                row.summary = item.summary or row.summary
+            db.flush()
 
     def mark_failed(
         self,
@@ -251,21 +240,6 @@ class ArchiveService:
             else:
                 pending += 1
         return pending, failed, ready
-
-    def retry_failed_fetch(self, db: Session, *, user_id: uuid.UUID) -> None:
-        """用户在自己的浏览器登录知乎之后，再点重试。服务器仍只走 HTTP，不开浏览器。"""
-        rows = self.list_failed_fetch(db, user_id=user_id)
-        contents = [
-            ZhihuContent(
-                title=row.title,
-                summary=row.summary or "",
-                url=row.source_url,
-                content_type=row.content_type,
-                created_at=0,
-            )
-            for row in rows
-        ]
-        self.ingest_listed_contents(db, user_id=user_id, contents=contents)
 
     def capture_from_browser(
         self,

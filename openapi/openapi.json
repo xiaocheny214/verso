@@ -1397,6 +1397,22 @@
               ],
               "title": "Code"
             }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
           }
         ],
         "responses": {
@@ -1824,27 +1840,6 @@
           }
         },
         "summary": "List Archive Queue",
-        "tags": [
-          "article"
-        ]
-      }
-    },
-    "/me/articles/retry-fetch": {
-      "post": {
-        "operationId": "retry_failed_fetch_me_articles_retry_fetch_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Response_FailedFetchListView_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Retry Failed Fetch",
         "tags": [
           "article"
         ]

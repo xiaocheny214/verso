@@ -16,7 +16,7 @@ from verso_app.server.reputation.models import Reputation
 from verso_app.server.reputation.service import ReputationService
 from verso_app.web.api.auth import router as auth_router
 from verso_app.web.handler import register_exception_handlers
-from verso_app.web.middleware.auth import get_auth_service
+from verso_app.web.middleware.auth import get_auth_service, get_portrait_service
 from verso_common.constants import REPUTATION_INITIAL_SCORE
 from verso_common.enums import BizCode
 from verso_common.exceptions import BizException
@@ -109,6 +109,32 @@ def test_login_url_sets_intent_cookie(db: Session, settings: AppSettings) -> Non
     assert body["code"] == 200
     assert "authorize_url" in body["data"]
     assert "verso_oauth_intent" in response.cookies
+
+
+def test_callback_uses_state_when_intent_cookie_missing(
+    db: Session, settings: AppSettings, monkeypatch
+) -> None:
+    monkeypatch.setattr("verso_app.web.api.auth.get_app_settings", lambda: settings)
+    service = _auth(db, settings)
+    started = service.start_login()
+
+    class QuietPortrait:
+        def sync(self, user_id) -> None:
+            return None
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(auth_router)
+    app.dependency_overrides[get_auth_service] = lambda: service
+    app.dependency_overrides[get_portrait_service] = lambda: QuietPortrait()
+    client = TestClient(app)
+    response = client.get(
+        "/auth/zhihu/callback",
+        params={"state": started.nonce, "authorization_code": "abc"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.headers["location"] == "http://localhost:3000/"
 
 
 def test_user_id_is_uuid(db: Session, settings: AppSettings) -> None:

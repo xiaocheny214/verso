@@ -227,7 +227,7 @@ def test_empty_zhihu_data_still_allows_self_report(db: Session, settings: AppSet
 
 def test_archive_ingest_failure_does_not_block_sync(db: Session, settings: AppSettings) -> None:
     class BoomArchive:
-        def ingest_listed_contents(self, *args, **kwargs) -> None:
+        def enqueue_listed_contents(self, *args, **kwargs) -> None:
             raise RuntimeError("archive down")
 
     redis = FakeRedis()

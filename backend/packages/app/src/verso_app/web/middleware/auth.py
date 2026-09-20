@@ -12,8 +12,6 @@ from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.exchange.service import ExchangeService
-from verso_app.server.fetch.http import HttpxZhihuMarkdownFetcher
-from verso_app.server.fetch.service import FetchService
 from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.extractor import build_evidence_classifier
@@ -48,7 +46,7 @@ def get_auth_service(session: SessionDep) -> AuthService:
 
 
 def get_archive_service() -> ArchiveService:
-    return ArchiveService(fetch=FetchService(HttpxZhihuMarkdownFetcher()))
+    return ArchiveService()
 
 
 def get_portrait_service(session: SessionDep) -> PortraitService:

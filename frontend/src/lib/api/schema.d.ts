@@ -243,23 +243,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/me/articles/retry-fetch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Retry Failed Fetch */
-        post: operations["retry_failed_fetch_me_articles_retry_fetch_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/me/portrait/self-report": {
         parameters: {
             query?: never;
@@ -1003,6 +986,7 @@ export interface operations {
             query?: {
                 authorization_code?: string | null;
                 code?: string | null;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -1358,26 +1342,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Response_ArchiveQueueView_"];
-                };
-            };
-        };
-    };
-    retry_failed_fetch_me_articles_retry_fetch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Response_FailedFetchListView_"];
                 };
             };
         };
