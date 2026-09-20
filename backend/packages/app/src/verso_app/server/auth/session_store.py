@@ -39,6 +39,16 @@ class SessionStore:
     def load_grant(self, user_id: str) -> str | None:
         return self._redis.get(f"oauth:zhihu:{user_id}")
 
+    def put_capture_token(self, user_id: str, ttl_sec: int = 600) -> str:
+        token = secrets.token_urlsafe(24)
+        self._redis.set(f"article:capture:{token}", user_id, ex=max(ttl_sec, 60))
+        return token
+
+    def user_id_for_capture(self, token: str) -> str | None:
+        if not token:
+            return None
+        return self._redis.get(f"article:capture:{token}")
+
     def issue_session(self, user_id: str, ttl_sec: int) -> str:
         old = self._redis.get(f"session:user:{user_id}")
         if old:

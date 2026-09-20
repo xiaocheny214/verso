@@ -1,6 +1,45 @@
 {
   "components": {
     "schemas": {
+      "ArticleArchiveView": {
+        "properties": {
+          "error_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Class"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "source_url",
+          "status"
+        ],
+        "title": "ArticleArchiveView",
+        "type": "object"
+      },
       "AuthorizeUrlData": {
         "properties": {
           "authorize_url": {
@@ -12,6 +51,37 @@
           "authorize_url"
         ],
         "title": "AuthorizeUrlData",
+        "type": "object"
+      },
+      "BrowserCaptureBody": {
+        "properties": {
+          "html": {
+            "minLength": 1,
+            "title": "Html",
+            "type": "string"
+          },
+          "source_url": {
+            "minLength": 8,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "token": {
+            "minLength": 8,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "source_url",
+          "html"
+        ],
+        "title": "BrowserCaptureBody",
         "type": "object"
       },
       "CreateReviewBody": {
@@ -93,6 +163,24 @@
           "closes_at"
         ],
         "title": "ExchangeView",
+        "type": "object"
+      },
+      "FailedFetchListView": {
+        "properties": {
+          "capture_token": {
+            "default": "",
+            "title": "Capture Token",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ArticleArchiveView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "FailedFetchListView",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -512,6 +600,48 @@
         "title": "ReputationView",
         "type": "object"
       },
+      "Response_ArticleArchiveView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArticleArchiveView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[ArticleArchiveView]",
+        "type": "object"
+      },
       "Response_AuthorizeUrlData_": {
         "properties": {
           "code": {
@@ -594,6 +724,48 @@
           }
         },
         "title": "Response[ExchangeView]",
+        "type": "object"
+      },
+      "Response_FailedFetchListView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailedFetchListView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[FailedFetchListView]",
         "type": "object"
       },
       "Response_MatchConditionView_": {
@@ -1495,6 +1667,89 @@
         "summary": "Me",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/me/articles/browser-capture": {
+      "post": {
+        "operationId": "capture_from_browser_me_articles_browser_capture_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserCaptureBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_ArticleArchiveView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture From Browser",
+        "tags": [
+          "article"
+        ]
+      }
+    },
+    "/me/articles/failed-fetch": {
+      "get": {
+        "operationId": "list_failed_fetch_me_articles_failed_fetch_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_FailedFetchListView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Failed Fetch",
+        "tags": [
+          "article"
+        ]
+      }
+    },
+    "/me/articles/retry-fetch": {
+      "post": {
+        "operationId": "retry_failed_fetch_me_articles_retry_fetch_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_FailedFetchListView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Retry Failed Fetch",
+        "tags": [
+          "article"
         ]
       }
     },

@@ -11,6 +11,7 @@ from hashlib import sha256
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
 from verso_app.server.portrait.extractor import (
     EvidenceClassifier,
@@ -42,11 +43,13 @@ class PortraitService:
         grants: GrantReader,
         zhihu: UserDataClient,
         classifier: EvidenceClassifier | None = None,
+        archive: ArchiveService | None = None,
     ) -> None:
         self._session = session
         self._grants = grants
         self._zhihu = zhihu
         self._classifier = classifier or RuleEvidenceClassifier()
+        self._archive = archive
 
     def card_for(self, user: User) -> UserCard:
         portraits = self._session.scalars(select(Portrait).where(Portrait.user_id == user.id)).all()
@@ -100,6 +103,13 @@ class PortraitService:
             window_end=now,
             synced_at=now,
         )
+        if self._archive is not None and contents.ok:
+            try:
+                self._archive.ingest_listed_contents(
+                    self._session, user_id=user_id, contents=contents.items
+                )
+            except Exception:
+                logger.exception("创作归档失败，不影响画像 user_id=%s", user_id)
 
     def self_report(self, user: User, tags: list[StrengthTag]) -> UserCard:
         stable = self._session.get(Portrait, (user.id, PortraitHorizon.STABLE.value))

@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { sessionQueryKey } from "@/model/auth";
+import { articlesQueryKey } from "@/model/article";
 import {
   STRENGTH_TAGS,
   isPortraitConflict,
@@ -126,6 +127,7 @@ export function PortraitPanel({ user }: { user: UserCard }) {
     mutationFn: portraitApi.syncPortrait,
     onSuccess: (card: UserCard) => {
       queryClient.setQueryData(sessionQueryKey, card);
+      void queryClient.invalidateQueries({ queryKey: articlesQueryKey });
       setNeedsRelogin(false);
       setNotice({
         kind: "success",

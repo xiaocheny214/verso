@@ -192,6 +192,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/articles/browser-capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Capture From Browser */
+        post: operations["capture_from_browser_me_articles_browser_capture_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/articles/failed-fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Failed Fetch */
+        get: operations["list_failed_fetch_me_articles_failed_fetch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/articles/retry-fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Failed Fetch */
+        post: operations["retry_failed_fetch_me_articles_retry_fetch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/portrait/self-report": {
         parameters: {
             query?: never;
@@ -264,10 +315,37 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ArticleArchiveView */
+        ArticleArchiveView: {
+            /** Error Class */
+            error_class?: string | null;
+            /** Id */
+            id: string;
+            /** Source Url */
+            source_url: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+        };
         /** AuthorizeUrlData */
         AuthorizeUrlData: {
             /** Authorize Url */
             authorize_url: string;
+        };
+        /** BrowserCaptureBody */
+        BrowserCaptureBody: {
+            /** Html */
+            html: string;
+            /** Source Url */
+            source_url: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Token */
+            token: string;
         };
         /** CreateReviewBody */
         CreateReviewBody: {
@@ -308,6 +386,16 @@ export interface components {
             user_a_id: string;
             /** User B Id */
             user_b_id: string;
+        };
+        /** FailedFetchListView */
+        FailedFetchListView: {
+            /**
+             * Capture Token
+             * @default
+             */
+            capture_token: string;
+            /** Items */
+            items?: components["schemas"]["ArticleArchiveView"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -511,6 +599,28 @@ export interface components {
             /** Suspended Until */
             suspended_until?: string | null;
         };
+        /** Response[ArticleArchiveView] */
+        Response_ArticleArchiveView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["ArticleArchiveView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
         /** Response[AuthorizeUrlData] */
         Response_AuthorizeUrlData_: {
             /**
@@ -543,6 +653,28 @@ export interface components {
             code: number;
             /** @description 业务数据 */
             data?: components["schemas"]["ExchangeView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
+        /** Response[FailedFetchListView] */
+        Response_FailedFetchListView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["FailedFetchListView"] | null;
             /**
              * Message
              * @description 提示信息
@@ -1086,6 +1218,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Response_UserCard_"];
+                };
+            };
+        };
+    };
+    capture_from_browser_me_articles_browser_capture_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserCaptureBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_ArticleArchiveView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_failed_fetch_me_articles_failed_fetch_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_FailedFetchListView_"];
+                };
+            };
+        };
+    };
+    retry_failed_fetch_me_articles_retry_fetch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_FailedFetchListView_"];
                 };
             };
         };

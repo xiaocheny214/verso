@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "langchain-core>=1.6.3",
+    "markdownify>=1.1",
 ]
 
 [project.scripts]

@@ -7,10 +7,13 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.exchange.service import ExchangeService
+from verso_app.server.fetch.http import HttpxZhihuMarkdownFetcher
+from verso_app.server.fetch.service import FetchService
 from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.extractor import build_evidence_classifier
@@ -25,6 +28,10 @@ from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClien
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
+def get_session_store() -> SessionStore:
+    return SessionStore(get_redis())
+
+
 def get_reputation_service() -> ReputationService:
     return ReputationService(settings=get_app_settings())
 
@@ -33,20 +40,25 @@ def get_auth_service(session: SessionDep) -> AuthService:
     settings = get_app_settings()
     return AuthService(
         session=session,
-        store=SessionStore(get_redis()),
+        store=get_session_store(),
         oauth=HttpxOAuthClient(settings),
         reputation=ReputationService(settings=settings),
         settings=settings,
     )
 
 
+def get_archive_service() -> ArchiveService:
+    return ArchiveService(fetch=FetchService(HttpxZhihuMarkdownFetcher()))
+
+
 def get_portrait_service(session: SessionDep) -> PortraitService:
     settings = get_app_settings()
     return PortraitService(
         session=session,
-        grants=SessionStore(get_redis()),
+        grants=get_session_store(),
         zhihu=HttpxUserDataClient(settings),
         classifier=build_evidence_classifier(settings),
+        archive=get_archive_service(),
     )
 
 

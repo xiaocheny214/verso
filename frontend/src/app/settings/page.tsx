@@ -5,6 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AppFrame } from "@/components/app-frame";
+import { ArticleFetchFallback } from "@/components/article-fetch-fallback";
 import { PortraitPanel } from "@/components/portrait-panel";
 import { ReputationMeter } from "@/components/reputation-meter";
 import { useLogout, useSession } from "@/components/use-session";
@@ -126,6 +127,7 @@ export default function SettingsPage() {
         </Card>
 
         <PortraitPanel user={user} />
+        <ArticleFetchFallback />
       </div>
     </AppFrame>
   );
