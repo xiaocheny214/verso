@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from verso_app.web.api import (
+    article_router,
     auth_router,
     exchange_router,
     match_router,
@@ -41,16 +42,23 @@ def create_app() -> FastAPI:
     settings = get_app_settings()
     app = FastAPI(title="Verso", version="0.1.0", lifespan=lifespan)
     register_exception_handlers(app)
+    origins = [
+        "https://www.zhihu.com",
+        "https://zhuanlan.zhihu.com",
+        "https://zhihu.com",
+    ]
     if settings.public_origin:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[settings.public_origin],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        origins.append(settings.public_origin)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(auth_router)
     app.include_router(portrait_router)
+    app.include_router(article_router)
     app.include_router(match_router)
     app.include_router(exchange_router)
     app.include_router(quality_router)
