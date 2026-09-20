@@ -12,6 +12,7 @@ import { cn, displayInitial } from "@/lib/utils";
 export const navItems = [
   { label: "匹配", href: "/match" },
   { label: "翻开的叶", href: "/exchange" },
+  { label: "归档", href: "/archive" },
 ] as const;
 
 export function Header() {

@@ -5,6 +5,7 @@ import {
   Compass,
   MessageSquare,
   Sparkles,
+  Archive,
   ArrowRight,
   Clock,
 } from "lucide-react";
@@ -231,6 +232,24 @@ function HomeDashboard({ user }: { user: UserCard }) {
                       </div>
                       <div className="text-slate-400 text-[11px]">
                         查看匹配对局
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                </Link>
+
+                <Link
+                  href="/archive"
+                  className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Archive className="h-4 w-4 text-amber-600" />
+                    <div>
+                      <div className="font-bold text-slate-800 text-xs">
+                        归档工作台
+                      </div>
+                      <div className="text-slate-400 text-[11px]">
+                        在知乎窗补抓正文
                       </div>
                     </div>
                   </div>
