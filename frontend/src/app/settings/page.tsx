@@ -1,16 +1,16 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, ArrowRight } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
 import { AppFrame } from "@/components/app-frame";
-import { ArticleFetchFallback } from "@/components/article-fetch-fallback";
 import { PortraitPanel } from "@/components/portrait-panel";
 import { ReputationMeter } from "@/components/reputation-meter";
 import { useLogout, useSession } from "@/components/use-session";
 import { reputationApi, reputationQueryKey } from "@/model/reputation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -20,7 +20,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { displayInitial } from "@/lib/utils";
+import { displayInitial, cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { user } = useSession();
@@ -127,7 +127,26 @@ export default function SettingsPage() {
         </Card>
 
         <PortraitPanel user={user} />
-        <ArticleFetchFallback />
+
+        <Card className="bg-white border-slate-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold text-slate-900">
+              创作归档
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500">
+              在你自己的知乎窗口里补抓正文。Verso 不读取知乎 Cookie。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/archive"
+              className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
+            >
+              打开归档工作台
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </AppFrame>
   );
