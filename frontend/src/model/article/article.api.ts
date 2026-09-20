@@ -1,12 +1,12 @@
 import { ApiError, apiClient, unwrap } from "@/lib/http";
 
-export const articlesQueryKey = ["articles", "failed-fetch"] as const;
+export const articlesQueryKey = ["articles"] as const;
+export const articleQueueQueryKey = ["articles", "queue"] as const;
 
 export const articleApi = {
+  queue: async () => unwrap(await apiClient.GET("/me/articles/queue")),
   failedFetch: async () =>
     unwrap(await apiClient.GET("/me/articles/failed-fetch")),
-  retryFetch: async () =>
-    unwrap(await apiClient.POST("/me/articles/retry-fetch")),
 };
 
 export function isArticleGrantExpired(error: unknown): boolean {
