@@ -1,5 +1,6 @@
 """共享枚举。"""
 
+from verso_common.enums.article import ArticleStatus
 from verso_common.enums.auth import UserStatus
 from verso_common.enums.biz_code import BizCode
 from verso_common.enums.exchange import ExchangeStatus
@@ -11,6 +12,7 @@ from verso_common.enums.realtime import RealtimeChannel
 from verso_common.enums.reputation import Eligibility
 
 __all__ = [
+    "ArticleStatus",
     "BizCode",
     "Eligibility",
     "ExchangeStatus",
