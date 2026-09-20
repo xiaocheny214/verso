@@ -301,3 +301,25 @@ def test_list_queue_puts_failed_ahead_of_pending(db: Session) -> None:
         "https://zhuanlan.zhihu.com/p/22",
     ]
     assert archive.queue_counts(db, user_id=user.id) == (1, 1, 1)
+
+
+def test_enqueue_listed_contents_does_not_fetch(db: Session) -> None:
+    from verso_framework.providers.zhihu import ZhihuContent
+
+    class BoomFetch:
+        def fetch_target(self, target):
+            raise AssertionError(f"must not fetch {target.source_url}")
+
+    store = MemoryObjectStore()
+    url = "https://www.zhihu.com/answer/1902358841586320975"
+    archive = ArchiveService(store, key_prefix="articles", fetch=BoomFetch())
+    user = _user(db)
+    archive.enqueue_listed_contents(
+        db,
+        user_id=user.id,
+        contents=[ZhihuContent("计算机也是坑", "", url, "answer", 1)],
+    )
+    row = archive.get_by_source(db, user_id=user.id, source_url=url)
+    assert row is not None
+    assert row.status == ArticleStatus.PENDING
+    assert row.error_class is None
