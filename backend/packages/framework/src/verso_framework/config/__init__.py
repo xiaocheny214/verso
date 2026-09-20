@@ -1,12 +1,13 @@
 """framework 配置。
 
-Postgres / Redis 用各自前缀；应用密钥用 ``VERSO_``。
+Postgres / Redis / 对象存储用各自前缀；应用密钥用 ``VERSO_``。
 engine / Redis 客户端懒创建，import 本包不连库。
 """
 
 from verso_framework.config.app import AppSettings, get_app_settings
 from verso_framework.config.database import DatabaseSettings
 from verso_framework.config.redis import RedisSettings
+from verso_framework.config.storage import StorageSettings, get_storage_settings
 
 # 兼容旧入口：``from verso_framework.config import get_settings``
 get_settings = get_app_settings
@@ -17,6 +18,8 @@ __all__ = [
     "DatabaseSettings",
     "RedisSettings",
     "Settings",
+    "StorageSettings",
     "get_app_settings",
     "get_settings",
+    "get_storage_settings",
 ]

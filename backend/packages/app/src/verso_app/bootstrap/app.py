@@ -23,6 +23,7 @@ from verso_framework.db import Base, get_engine
 async def lifespan(_app: FastAPI):
     settings = get_app_settings()
     if settings.create_tables:
+        from verso_app.server.article import models as article_models  # noqa: F401
         from verso_app.server.auth import models as auth_models  # noqa: F401
         from verso_app.server.exchange import models as exchange_models  # noqa: F401
         from verso_app.server.match import models as match_models  # noqa: F401
