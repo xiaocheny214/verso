@@ -1003,6 +1003,7 @@ export interface operations {
             query?: {
                 authorization_code?: string | null;
                 code?: string | null;
+                state?: string | null;
             };
             header?: never;
             path?: never;
