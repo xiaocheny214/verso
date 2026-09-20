@@ -97,17 +97,6 @@ def list_failed_fetch(
     return ApiResponse.success(_failed_list(session, archive, store, user))
 
 
-@router.post("/me/articles/retry-fetch")
-def retry_failed_fetch(
-    session: SessionDep,
-    archive: ArchiveDep,
-    store: StoreDep,
-    user: UserDep,
-) -> ApiResponse[FailedFetchListView]:
-    archive.retry_failed_fetch(session, user_id=user.id)
-    return ApiResponse.success(_failed_list(session, archive, store, user))
-
-
 @router.post("/me/articles/browser-capture")
 def capture_from_browser(
     body: BrowserCaptureBody,
