@@ -13,6 +13,7 @@ dependencies = [
     "redis>=5.0",
     "langchain-core>=1.6.3",
     "langchain-openai>=1.6.2",
+    "qiniu>=7.15",
 ]
 
 [tool.uv.sources]
