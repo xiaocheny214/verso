@@ -10,7 +10,7 @@ from verso_app.server.match.compatibility import (
     LlmPairCompatibilityEvaluator,
     SafePairCompatibilityEvaluator,
 )
-from verso_common.enums import StrengthTag
+from verso_common.enums import MatchEvaluationOutcome, StrengthTag
 
 
 class _Message:
@@ -126,6 +126,10 @@ def test_safe_evaluator_skips_candidate_when_model_fails() -> None:
     )
 
     assert evaluator.allows((_direction("left"), _direction("right"))) is False
+    verdict = evaluator.judge((_direction("left"), _direction("right")))
+    assert verdict.outcome is MatchEvaluationOutcome.SKIPPED_ERROR
+    assert verdict.error_class == "RuntimeError"
+    assert verdict.decisions == ()
 
 
 def test_llm_input_limits_evidence_and_omits_urls() -> None:

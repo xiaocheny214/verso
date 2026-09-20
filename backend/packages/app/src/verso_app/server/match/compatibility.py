@@ -12,7 +12,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from verso_common.enums import StrengthTag
+from verso_common.enums import MatchEvaluationOutcome, StrengthTag
 from verso_framework.config.app import AppSettings
 from verso_framework.providers.llm import build_chat_model
 
@@ -44,6 +44,26 @@ class DirectionInput:
     question: str
     requested_tag: StrengthTag
     candidate_evidence: tuple[CapabilityEvidence, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedDirectionDecision:
+    direction_id: str
+    signal: str
+    confidence: int
+    reason: str
+    evidence_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CompatibilityVerdict:
+    """模型看过这一对之后的结论。allowed 仍决定能否配对。"""
+
+    allowed: bool
+    outcome: MatchEvaluationOutcome | None
+    error_class: str | None
+    decisions: tuple[RecordedDirectionDecision, ...]
+    directions: tuple[DirectionInput, ...]
 
 
 class PairCompatibilityEvaluator(Protocol):
@@ -184,15 +204,10 @@ class LlmPairCompatibilityEvaluator:
         )
 
     def allows(self, directions: tuple[DirectionInput, DirectionInput]) -> bool:
-        bounded = tuple(
-            DirectionInput(
-                id=item.id,
-                question=item.question[:500],
-                requested_tag=item.requested_tag,
-                candidate_evidence=item.candidate_evidence[:MAX_EVIDENCE_PER_DIRECTION],
-            )
-            for item in directions
-        )
+        return self.judge(directions).allowed
+
+    def judge(self, directions: tuple[DirectionInput, DirectionInput]) -> CompatibilityVerdict:
+        bounded = _bound_directions(directions)
         payload = [
             {
                 "direction_id": item.id,
@@ -201,8 +216,8 @@ class LlmPairCompatibilityEvaluator:
                 "candidate_evidence": [
                     {
                         "evidence_id": evidence.id,
-                        "title": evidence.title[:240],
-                        "reason": evidence.reason[:160],
+                        "title": evidence.title,
+                        "reason": evidence.reason,
                         "confidence": evidence.confidence,
                     }
                     for evidence in item.candidate_evidence
@@ -217,7 +232,15 @@ class LlmPairCompatibilityEvaluator:
             ]
         )
         parsed = _parse_structured_pair(raw)
-        return _both_directions_supported(bounded, parsed.directions)
+        recorded = tuple(_recorded(item) for item in parsed.directions)
+        allowed = _both_directions_supported(bounded, parsed.directions)
+        return CompatibilityVerdict(
+            allowed=allowed,
+            outcome=None if allowed else _skip_outcome(parsed.directions),
+            error_class=None,
+            decisions=recorded,
+            directions=bounded,
+        )
 
 
 class SafePairCompatibilityEvaluator:
@@ -227,17 +250,77 @@ class SafePairCompatibilityEvaluator:
         self._primary = primary
 
     def allows(self, directions: tuple[DirectionInput, DirectionInput]) -> bool:
+        return self.judge(directions).allowed
+
+    def judge(self, directions: tuple[DirectionInput, DirectionInput]) -> CompatibilityVerdict:
+        judge = getattr(self._primary, "judge", None)
         try:
-            return self._primary.allows(directions)
-        except Exception:
+            if callable(judge):
+                return judge(directions)
+            allowed = self._primary.allows(directions)
+        except Exception as exc:
             logger.warning("具体问题匹配判断失败，跳过候选", exc_info=True)
-            return False
+            return CompatibilityVerdict(
+                allowed=False,
+                outcome=MatchEvaluationOutcome.SKIPPED_ERROR,
+                error_class=type(exc).__name__,
+                decisions=(),
+                directions=_bound_directions(directions),
+            )
+        return CompatibilityVerdict(
+            allowed=allowed,
+            outcome=None if allowed else MatchEvaluationOutcome.SKIPPED_UNSUPPORTED,
+            error_class=None,
+            decisions=(),
+            directions=_bound_directions(directions),
+        )
 
 
 def build_pair_compatibility_evaluator(settings: AppSettings) -> PairCompatibilityEvaluator:
     if not settings.llm_api_key or not settings.llm_model:
         return TagOnlyCompatibilityEvaluator()
     return SafePairCompatibilityEvaluator(LlmPairCompatibilityEvaluator(build_chat_model(settings)))
+
+
+def _bound_directions(
+    directions: tuple[DirectionInput, DirectionInput],
+) -> tuple[DirectionInput, DirectionInput]:
+    return tuple(
+        DirectionInput(
+            id=item.id,
+            question=item.question[:500],
+            requested_tag=item.requested_tag,
+            candidate_evidence=tuple(
+                CapabilityEvidence(
+                    id=evidence.id,
+                    title=evidence.title[:240],
+                    url=evidence.url,
+                    reason=evidence.reason[:160],
+                    confidence=evidence.confidence,
+                )
+                for evidence in item.candidate_evidence[:MAX_EVIDENCE_PER_DIRECTION]
+            ),
+        )
+        for item in directions
+    )
+
+
+def _recorded(decision: _LlmDirectionDecision) -> RecordedDirectionDecision:
+    return RecordedDirectionDecision(
+        direction_id=decision.direction_id,
+        signal=decision.signal.value,
+        confidence=decision.confidence,
+        reason=decision.reason,
+        evidence_ids=tuple(decision.evidence_ids),
+    )
+
+
+def _skip_outcome(decisions: list[_LlmDirectionDecision]) -> MatchEvaluationOutcome:
+    if any(item.signal is CompatibilitySignal.UNSUPPORTED for item in decisions):
+        return MatchEvaluationOutcome.SKIPPED_UNSUPPORTED
+    if any(item.signal is CompatibilitySignal.UNCLEAR for item in decisions):
+        return MatchEvaluationOutcome.SKIPPED_UNCLEAR
+    return MatchEvaluationOutcome.SKIPPED_LOW_CONFIDENCE
 
 
 def _both_directions_supported(

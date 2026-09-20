@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -14,17 +15,20 @@ from verso_app.server.exchange.ports import ExchangeOpener, NoopExchangeOpener
 from verso_app.server.match.compatibility import (
     MAX_COMPATIBILITY_CANDIDATES,
     CapabilityEvidence,
+    CompatibilityVerdict,
     DirectionInput,
     PairCompatibilityEvaluator,
     TagOnlyCompatibilityEvaluator,
 )
-from verso_app.server.match.models import MatchCondition
+from verso_app.server.match.models import MatchCondition, MatchEvaluation
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.reputation.service import ReputationService
 from verso_common.constants import MATCH_WAIT_HOURS, PAIR_WINDOW_HOURS
-from verso_common.enums import BizCode, MatchConditionStatus, StrengthTag
+from verso_common.enums import BizCode, MatchConditionStatus, MatchEvaluationOutcome, StrengthTag
 from verso_common.exceptions import BizException
 from verso_common.models import MatchConditionView, MatchPeerView
+
+logger = logging.getLogger("verso.match")
 
 
 class MatchService:
@@ -131,22 +135,56 @@ class MatchService:
             )
         )
         for other in compatible[:MAX_COMPATIBILITY_CANDIDATES]:
-            if not self._supports_specific_pair(mine, other):
-                continue
-            locked = self._lock_waiting(other.id, now)
-            if locked is None:
-                continue
-            if self._claim_pair(mine, locked, now):
+            if self._consider_candidate(mine, other, now):
                 return
 
-    def _supports_specific_pair(
+    def _consider_candidate(
+        self, mine: MatchCondition, other: MatchCondition, now: datetime
+    ) -> bool:
+        directions = self._pair_directions(mine, other)
+        verdict = self._model_verdict(directions)
+        allowed = self._compatibility.allows(directions) if verdict is None else verdict.allowed
+        if not allowed:
+            if verdict is not None:
+                self._record_evaluation(
+                    mine,
+                    other,
+                    verdict,
+                    verdict.outcome or MatchEvaluationOutcome.SKIPPED_ERROR,
+                )
+            return False
+        locked = self._lock_waiting(other.id, now)
+        if locked is None:
+            if verdict is not None:
+                self._record_evaluation(mine, other, verdict, MatchEvaluationOutcome.SKIPPED_LOCK)
+            return False
+        claimed = self._claim_pair(mine, locked, now)
+        if verdict is not None:
+            self._record_evaluation(
+                mine,
+                other,
+                verdict,
+                MatchEvaluationOutcome.PAIRED if claimed else MatchEvaluationOutcome.SKIPPED_LOCK,
+            )
+        return claimed
+
+    def _model_verdict(
+        self,
+        directions: tuple[DirectionInput, DirectionInput],
+    ) -> CompatibilityVerdict | None:
+        judge = getattr(self._compatibility, "judge", None)
+        if not callable(judge):
+            return None
+        return judge(directions)
+
+    def _pair_directions(
         self,
         mine: MatchCondition,
         other: MatchCondition,
-    ) -> bool:
+    ) -> tuple[DirectionInput, DirectionInput]:
         mine_wants = StrengthTag(mine.want_tag)
         other_wants = StrengthTag(other.want_tag)
-        directions = (
+        return (
             DirectionInput(
                 id=f"{other.user_id}:{mine.id}",
                 question=mine.want_text,
@@ -160,7 +198,29 @@ class MatchService:
                 candidate_evidence=self._capability_evidence(mine.user_id, other_wants),
             ),
         )
-        return self._compatibility.allows(directions)
+
+    def _record_evaluation(
+        self,
+        mine: MatchCondition,
+        other: MatchCondition,
+        verdict: CompatibilityVerdict,
+        outcome: MatchEvaluationOutcome,
+    ) -> None:
+        try:
+            with self._session.begin_nested():
+                self._session.add(
+                    MatchEvaluation(
+                        condition_ids=sorted((mine.id, other.id), key=str),
+                        sides=_evaluation_sides(mine, other, verdict),
+                        outcome=outcome.value,
+                        error_class=verdict.error_class
+                        if outcome is MatchEvaluationOutcome.SKIPPED_ERROR
+                        else None,
+                    )
+                )
+                self._session.flush()
+        except Exception:
+            logger.warning("匹配决策留痕失败", exc_info=True)
 
     def _lock_waiting(self, condition_id: uuid.UUID, now: datetime) -> MatchCondition | None:
         stmt = select(MatchCondition).where(
@@ -324,6 +384,53 @@ class MatchService:
             strengths=strengths,
             score=self._reputation.score_of(self._session, peer.id),
         )
+
+
+def _evaluation_sides(
+    mine: MatchCondition,
+    other: MatchCondition,
+    verdict: CompatibilityVerdict,
+) -> dict[str, dict[str, object]]:
+    by_direction = {item.direction_id: item for item in verdict.decisions}
+    known = {mine.id, other.id}
+    sides: dict[str, dict[str, object]] = {}
+    for direction in verdict.directions:
+        condition_id = _answerer_condition_id(direction.id, mine, other, known)
+        decision = by_direction.get(direction.id)
+        sides[str(condition_id)] = {
+            "evidence": [
+                {
+                    "id": item.id,
+                    "title": item.title,
+                    "confidence": item.confidence,
+                    "reason": item.reason,
+                }
+                for item in direction.candidate_evidence
+            ],
+            "decision": None
+            if decision is None
+            else {
+                "signal": decision.signal,
+                "confidence": decision.confidence,
+                "reason": decision.reason,
+                "evidence_ids": list(decision.evidence_ids),
+            },
+        }
+    return sides
+
+
+def _answerer_condition_id(
+    direction_id: str,
+    mine: MatchCondition,
+    other: MatchCondition,
+    known: set[uuid.UUID],
+) -> uuid.UUID:
+    question_id = direction_id.split(":", 1)[-1]
+    if question_id == str(mine.id) and other.id in known:
+        return other.id
+    if question_id == str(other.id) and mine.id in known:
+        return mine.id
+    return other.id
 
 
 def _capability_evidence_id(tag: StrengthTag, title: str, url: str) -> str:
