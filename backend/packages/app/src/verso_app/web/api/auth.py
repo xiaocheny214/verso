@@ -74,9 +74,10 @@ def zhihu_callback(
     request: Request,
     authorization_code: str | None = None,
     code: str | None = None,
+    state: str | None = None,
 ) -> RedirectResponse:
     auth_code = authorization_code or code or ""
-    nonce = request.cookies.get("verso_oauth_intent") or ""
+    nonce = request.cookies.get("verso_oauth_intent") or state or ""
     result = auth.complete_login(code=auth_code, nonce=nonce)
     try:
         portrait.sync(result.user.id)
