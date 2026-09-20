@@ -99,6 +99,43 @@ class ArchiveService:
         db.flush()
         return row
 
+    def enqueue_listed_contents(
+        self,
+        db: Session,
+        *,
+        user_id: uuid.UUID,
+        contents: Sequence[ZhihuContent],
+    ) -> None:
+        """登录热路径只登记待抓，不打知乎匿名接口。"""
+        for item in contents:
+            target = archivable_from_content(url=item.url, content_type=item.content_type)
+            if target is None:
+                continue
+            row = self.get_by_source(db, user_id=user_id, source_url=target.source_url)
+            if row is None:
+                row = self._row_for_target(db, user_id=user_id, target=target)
+            if row is not None and row.status == ArticleStatus.READY:
+                continue
+            if row is None:
+                db.add(
+                    UserArticle(
+                        user_id=user_id,
+                        source_url=target.source_url,
+                        content_type=target.kind,
+                        title=item.title,
+                        summary=item.summary or None,
+                        object_key=article_object_key(
+                            user_id, target.source_url, prefix=self._key_prefix
+                        ),
+                        status=ArticleStatus.PENDING,
+                        error_class=None,
+                    )
+                )
+            else:
+                row.title = item.title or row.title
+                row.summary = item.summary or row.summary
+            db.flush()
+
     def ingest_listed_contents(
         self,
         db: Session,
