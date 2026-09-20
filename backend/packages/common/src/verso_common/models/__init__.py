@@ -39,6 +39,19 @@ class UserCard(BaseModel):
     portraits: list[PortraitView] = Field(default_factory=list)
 
 
+class ArticleArchiveView(BaseModel):
+    id: str
+    title: str
+    source_url: str
+    status: str
+    error_class: str | None = None
+
+
+class FailedFetchListView(BaseModel):
+    items: list[ArticleArchiveView] = Field(default_factory=list)
+    capture_token: str = ""
+
+
 class MatchPeerView(BaseModel):
     id: str
     name: str
