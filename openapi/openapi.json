@@ -1845,27 +1845,6 @@
         ]
       }
     },
-    "/me/articles/retry-fetch": {
-      "post": {
-        "operationId": "retry_failed_fetch_me_articles_retry_fetch_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Response_FailedFetchListView_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Retry Failed Fetch",
-        "tags": [
-          "article"
-        ]
-      }
-    },
     "/me/portrait/self-report": {
       "post": {
         "operationId": "self_report_me_portrait_self_report_post",
