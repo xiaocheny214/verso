@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   BookmarkPlus,
+  Copy,
   ExternalLink,
   RefreshCw,
   ShieldCheck,
@@ -306,16 +307,12 @@ export function ArchiveWorkbench() {
             </p>
           </div>
           {bookmarklet ? (
-            <a
-              href={bookmarklet}
-              onClick={(event) => {
-                event.preventDefault();
+            <BookmarkletControl
+              code={bookmarklet}
+              onCopied={(message) => {
+                setNotice(message);
               }}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800"
-            >
-              <BookmarkPlus className="h-3.5 w-3.5" />
-              存到 Verso（拖到书签栏）
-            </a>
+            />
           ) : null}
         </div>
         {items.length ? (
@@ -341,11 +338,72 @@ export function ArchiveWorkbench() {
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            在本页点「存到
-            Verso」不会提取正文。必须拖到书签栏，在已经打开的知乎文章标签上再点。
+            先删掉书签栏里旧的「存到
+            Verso」。点「复制书签地址」，打开该书签的「修改」，把网址整段换成复制内容后保存。然后在知乎文章页点这枚书签。
           </span>
         </div>
       </section>
+    </div>
+  );
+}
+
+function BookmarkletControl({
+  code,
+  onCopied,
+}: {
+  code: string;
+  onCopied: (message: string) => void;
+}) {
+  const linkRef = useRef<HTMLAnchorElement>(null);
+
+  useLayoutEffect(() => {
+    const node = linkRef.current;
+    if (!node) {
+      return;
+    }
+    node.setAttribute("href", code);
+  }, [code]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Bookmark drag needs an anchor. Click is ignored so the script only runs on Zhihu. */}
+      {/* oxlint-disable-next-line jsx-a11y/anchor-is-valid */}
+      <a
+        ref={linkRef}
+        href="#"
+        draggable
+        onClick={(event) => {
+          event.preventDefault();
+        }}
+        onDragStart={(event) => {
+          event.dataTransfer.setData("text/uri-list", code);
+          event.dataTransfer.setData("text/plain", code);
+        }}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800"
+      >
+        <BookmarkPlus className="h-3.5 w-3.5" />
+        存到 Verso
+      </a>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          void (async () => {
+            try {
+              await navigator.clipboard.writeText(code);
+              onCopied(
+                "已复制书签地址。打开书签的「修改」，把网址整段换成刚复制的内容，保存后再去知乎文章页点这枚书签。",
+              );
+            } catch {
+              onCopied("复制失败。请允许本页访问剪贴板后再试。");
+            }
+          })();
+        }}
+      >
+        <Copy className="mr-1.5 h-3.5 w-3.5" />
+        复制书签地址
+      </Button>
     </div>
   );
 }
