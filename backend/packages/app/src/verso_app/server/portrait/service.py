@@ -105,7 +105,7 @@ class PortraitService:
         )
         if self._archive is not None and contents.ok:
             try:
-                self._archive.ingest_listed_contents(
+                self._archive.enqueue_listed_contents(
                     self._session, user_id=user_id, contents=contents.items
                 )
             except Exception:
