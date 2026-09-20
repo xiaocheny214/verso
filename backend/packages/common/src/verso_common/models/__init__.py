@@ -52,6 +52,16 @@ class FailedFetchListView(BaseModel):
     capture_token: str = ""
 
 
+class ArchiveQueueView(BaseModel):
+    """工作台队列：未就绪正文 + 计数。capture_token 仅在仍有待补抓时下发。"""
+
+    items: list[ArticleArchiveView] = Field(default_factory=list)
+    capture_token: str = ""
+    pending_count: int = 0
+    failed_count: int = 0
+    ready_count: int = 0
+
+
 class MatchPeerView(BaseModel):
     id: str
     name: str

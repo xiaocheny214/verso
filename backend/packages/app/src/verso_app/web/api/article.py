@@ -21,7 +21,7 @@ from verso_app.web.middleware.auth import (
 )
 from verso_common.enums import BizCode
 from verso_common.exceptions import BizException
-from verso_common.models import ArticleArchiveView, FailedFetchListView
+from verso_common.models import ArchiveQueueView, ArticleArchiveView, FailedFetchListView
 from verso_common.result import Response as ApiResponse
 
 router = APIRouter(tags=["article"])
@@ -57,6 +57,34 @@ def _failed_list(
     items = [_view(row) for row in archive.list_failed_fetch(session, user_id=user.id)]
     token = store.put_capture_token(str(user.id)) if items else ""
     return FailedFetchListView(items=items, capture_token=token)
+
+
+def _queue_view(
+    session: Session,
+    archive: ArchiveService,
+    store: SessionStore,
+    user: User,
+) -> ArchiveQueueView:
+    items = [_view(row) for row in archive.list_queue(session, user_id=user.id)]
+    pending_count, failed_count, ready_count = archive.queue_counts(session, user_id=user.id)
+    token = store.put_capture_token(str(user.id)) if items else ""
+    return ArchiveQueueView(
+        items=items,
+        capture_token=token,
+        pending_count=pending_count,
+        failed_count=failed_count,
+        ready_count=ready_count,
+    )
+
+
+@router.get("/me/articles/queue")
+def list_archive_queue(
+    session: SessionDep,
+    archive: ArchiveDep,
+    store: StoreDep,
+    user: UserDep,
+) -> ApiResponse[ArchiveQueueView]:
+    return ApiResponse.success(_queue_view(session, archive, store, user))
 
 
 @router.get("/me/articles/failed-fetch")

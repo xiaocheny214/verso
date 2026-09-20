@@ -261,3 +261,43 @@ def test_browser_capture_rejects_unknown_url(db: Session) -> None:
             source_url="https://zhuanlan.zhihu.com/p/999",
             html="<p>x</p>",
         )
+
+
+def test_list_queue_puts_failed_ahead_of_pending(db: Session) -> None:
+    from verso_framework.providers.zhihu import ZhihuContent
+
+    store = MemoryObjectStore()
+    fetch = _FakeFetch(
+        {"https://zhuanlan.zhihu.com/p/20": "# ok"},
+        fail={"https://zhuanlan.zhihu.com/p/21"},
+    )
+    archive = ArchiveService(store, key_prefix="articles", fetch=fetch)
+    user = _user(db)
+    archive.ingest_listed_contents(
+        db,
+        user_id=user.id,
+        contents=[
+            ZhihuContent("坏", "", "https://zhuanlan.zhihu.com/p/21", "article", 1),
+            ZhihuContent("好", "", "https://zhuanlan.zhihu.com/p/20", "article", 1),
+        ],
+    )
+    archive.mark_failed(
+        db,
+        user_id=user.id,
+        source_url="https://zhuanlan.zhihu.com/p/22",
+        content_type="article",
+        title="等",
+        error_class="pending_hold",
+    )
+    row = archive.get_by_source(db, user_id=user.id, source_url="https://zhuanlan.zhihu.com/p/22")
+    assert row is not None
+    row.status = ArticleStatus.PENDING
+    row.error_class = None
+    db.flush()
+
+    queue = archive.list_queue(db, user_id=user.id)
+    assert [item.source_url for item in queue] == [
+        "https://zhuanlan.zhihu.com/p/21",
+        "https://zhuanlan.zhihu.com/p/22",
+    ]
+    assert archive.queue_counts(db, user_id=user.id) == (1, 1, 1)

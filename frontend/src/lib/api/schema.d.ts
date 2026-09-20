@@ -226,6 +226,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/articles/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Archive Queue */
+        get: operations["list_archive_queue_me_articles_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/articles/retry-fetch": {
         parameters: {
             query?: never;
@@ -315,6 +332,34 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ArchiveQueueView
+         * @description 工作台队列：未就绪正文 + 计数。capture_token 仅在仍有待补抓时下发。
+         */
+        ArchiveQueueView: {
+            /**
+             * Capture Token
+             * @default
+             */
+            capture_token: string;
+            /**
+             * Failed Count
+             * @default 0
+             */
+            failed_count: number;
+            /** Items */
+            items?: components["schemas"]["ArticleArchiveView"][];
+            /**
+             * Pending Count
+             * @default 0
+             */
+            pending_count: number;
+            /**
+             * Ready Count
+             * @default 0
+             */
+            ready_count: number;
+        };
         /** ArticleArchiveView */
         ArticleArchiveView: {
             /** Error Class */
@@ -598,6 +643,28 @@ export interface components {
             score_max: number;
             /** Suspended Until */
             suspended_until?: string | null;
+        };
+        /** Response[ArchiveQueueView] */
+        Response_ArchiveQueueView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["ArchiveQueueView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
         };
         /** Response[ArticleArchiveView] */
         Response_ArticleArchiveView_: {
@@ -1271,6 +1338,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Response_FailedFetchListView_"];
+                };
+            };
+        };
+    };
+    list_archive_queue_me_articles_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_ArchiveQueueView_"];
                 };
             };
         };

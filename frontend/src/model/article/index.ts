@@ -1,6 +1,11 @@
 export {
   articleApi,
+  articleQueueQueryKey,
   articlesQueryKey,
   isArticleGrantExpired,
 } from "./article.api";
-export type { ArticleArchive, FailedFetchList } from "./article.type";
+export type {
+  ArchiveQueue,
+  ArticleArchive,
+  FailedFetchList,
+} from "./article.type";
