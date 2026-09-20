@@ -11,9 +11,11 @@ from sqlalchemy.pool import StaticPool
 from verso_app.server.auth.models import User
 from verso_app.server.match.compatibility import (
     MAX_COMPATIBILITY_CANDIDATES,
+    CompatibilityVerdict,
     DirectionInput,
+    RecordedDirectionDecision,
 )
-from verso_app.server.match.models import MatchCondition
+from verso_app.server.match.models import MatchCondition, MatchEvaluation
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.reputation.models import Reputation
@@ -30,6 +32,7 @@ from verso_common.enums import (
     BizCode,
     Eligibility,
     MatchConditionStatus,
+    MatchEvaluationOutcome,
     PortraitHorizon,
     PortraitSource,
     StrengthTag,
@@ -62,6 +65,46 @@ class RecordingCompatibility:
     def allows(self, directions: tuple[DirectionInput, DirectionInput]) -> bool:
         self.calls.append(directions)
         return self.allowed
+
+
+class JudgingCompatibility:
+    def __init__(
+        self,
+        *,
+        allowed: bool,
+        outcome: MatchEvaluationOutcome | None = None,
+        error_class: str | None = None,
+    ) -> None:
+        self.allowed = allowed
+        self.outcome = outcome
+        self.error_class = error_class
+        self.calls: list[tuple[DirectionInput, DirectionInput]] = []
+
+    def judge(self, directions: tuple[DirectionInput, DirectionInput]) -> CompatibilityVerdict:
+        self.calls.append(directions)
+        if self.error_class is not None:
+            decisions: tuple[RecordedDirectionDecision, ...] = ()
+        else:
+            signal = "supported" if self.allowed else "unsupported"
+            decisions = tuple(
+                RecordedDirectionDecision(
+                    direction_id=item.id,
+                    signal=signal,
+                    confidence=90 if self.allowed else 30,
+                    reason="证据能回答这个问题" if self.allowed else "证据和问题不直接相关",
+                    evidence_ids=(item.candidate_evidence[0].id,)
+                    if self.allowed and item.candidate_evidence
+                    else (),
+                )
+                for item in directions
+            )
+        return CompatibilityVerdict(
+            allowed=self.allowed,
+            outcome=self.outcome,
+            error_class=self.error_class,
+            decisions=decisions,
+            directions=directions,
+        )
 
 
 @pytest.fixture
@@ -178,6 +221,7 @@ def test_complementary_pair_shares_pair_id(db: Session) -> None:
     assert len(exchange.opened) == 1
     assert exchange.opened[0]["pair_id"] == UUID(matched.pair_id)
     assert matched.pair_closes_at is not None
+    assert db.scalars(select(MatchEvaluation)).all() == []
     delta = matched.pair_closes_at - datetime.now(UTC)
     assert timedelta(hours=PAIR_WINDOW_HOURS - 1) < delta <= timedelta(hours=PAIR_WINDOW_HOURS)
 
@@ -266,6 +310,53 @@ def test_specific_evaluator_has_a_candidate_limit(db: Session) -> None:
 
     assert result.status == MatchConditionStatus.WAITING
     assert len(evaluator.calls) == MAX_COMPATIBILITY_CANDIDATES
+
+
+def test_model_skip_is_recorded_without_pairing(db: Session) -> None:
+    evaluator = JudgingCompatibility(
+        allowed=False,
+        outcome=MatchEvaluationOutcome.SKIPPED_UNSUPPORTED,
+    )
+    service = MatchService(db, compatibility=evaluator)
+    alice = _user(
+        db,
+        name="Alice",
+        stable=[StrengthTag.WRITING],
+        evidence={StrengthTag.WRITING: "用间隔号提升可读性"},
+    )
+    bob = _user(
+        db,
+        name="Bob",
+        stable=[StrengthTag.FINANCE],
+        evidence={StrengthTag.FINANCE: "纳斯达克定投复盘"},
+    )
+    service.submit(alice, want_text="现在还可以定投吗", want_tag=StrengthTag.FINANCE)
+    result = service.submit(bob, want_text="如何让文章言之有物", want_tag=StrengthTag.WRITING)
+
+    assert result.status == MatchConditionStatus.WAITING
+    row = db.scalars(select(MatchEvaluation)).one()
+    conditions = db.scalars(select(MatchCondition)).all()
+    assert set(row.condition_ids) == {item.id for item in conditions}
+    assert set(row.sides) == {str(item) for item in row.condition_ids}
+    assert row.outcome == MatchEvaluationOutcome.SKIPPED_UNSUPPORTED.value
+    assert row.error_class is None
+    assert row.label is None
+    assert all(side["decision"]["signal"] == "unsupported" for side in row.sides.values())
+
+
+def test_model_pair_is_recorded(db: Session) -> None:
+    evaluator = JudgingCompatibility(allowed=True)
+    service = MatchService(db, compatibility=evaluator)
+    alice = _user(db, name="Alice", stable=[StrengthTag.WRITING])
+    bob = _user(db, name="Bob", stable=[StrengthTag.FINANCE])
+    service.submit(alice, want_text="现在还可以定投吗", want_tag=StrengthTag.FINANCE)
+    result = service.submit(bob, want_text="间隔号能不能提升可读性", want_tag=StrengthTag.WRITING)
+
+    assert result.status == MatchConditionStatus.MATCHED
+    row = db.scalars(select(MatchEvaluation)).one()
+    assert row.outcome == MatchEvaluationOutcome.PAIRED.value
+    assert set(row.condition_ids) == {item.id for item in db.scalars(select(MatchCondition))}
+    assert all(side["decision"]["signal"] == "supported" for side in row.sides.values())
 
 
 def test_one_way_and_same_tag_stay_waiting(db: Session) -> None:
