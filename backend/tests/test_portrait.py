@@ -61,11 +61,17 @@ def _auth(
     )
 
 
-def _portrait(db: Session, redis: FakeRedis, zhihu: FakeZhihu | None = None) -> PortraitService:
+def _portrait(
+    db: Session,
+    redis: FakeRedis,
+    zhihu: FakeZhihu | None = None,
+    archive=None,
+) -> PortraitService:
     return PortraitService(
         session=db,
         grants=SessionStore(redis),
         zhihu=zhihu or FakeZhihu(),
+        archive=archive,
     )
 
 
@@ -217,3 +223,28 @@ def test_empty_zhihu_data_still_allows_self_report(db: Session, settings: AppSet
     stable = next(item for item in card.portraits if item.horizon == PortraitHorizon.STABLE)
     assert stable.strengths[0].tag == StrengthTag.FITNESS
     assert stable.strengths[0].source == PortraitSource.SELF_REPORTED
+
+
+def test_archive_ingest_failure_does_not_block_sync(db: Session, settings: AppSettings) -> None:
+    class BoomArchive:
+        def ingest_listed_contents(self, *args, **kwargs) -> None:
+            raise RuntimeError("archive down")
+
+    redis = FakeRedis()
+    zhihu = FakeZhihu(
+        contents=[
+            ZhihuContent(
+                "Python 开发笔记",
+                "",
+                "https://zhuanlan.zhihu.com/p/1",
+                "article",
+                int(datetime.now(UTC).timestamp()),
+            )
+        ]
+    )
+    auth = _auth(db, settings, redis=redis)
+    user = auth.complete_login(code="a", nonce=auth.start_login().nonce).user
+    _portrait(db, redis, zhihu, archive=BoomArchive()).sync(user.id)
+    stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
+    assert stable is not None
+    assert StrengthTag.PROGRAMMING.value in stable.strengths
