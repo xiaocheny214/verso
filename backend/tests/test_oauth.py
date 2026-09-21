@@ -132,3 +132,56 @@ def test_fetch_profile_open_id_without_user_id_still_fails(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="zhihu profile missing url_token keys="):
         _client(monkeypatch, handler).fetch_profile("user-tok")
+
+
+class _FlakyClient:
+    def __init__(self, failures: int, response: httpx.Response) -> None:
+        self._left = failures
+        self._response = response
+        self.calls = 0
+
+    def request(self, _method: str, _url: str, **_kwargs) -> httpx.Response:
+        self.calls += 1
+        if self._left > 0:
+            self._left -= 1
+            raise httpx.ConnectTimeout("tls handshake")
+        return self._response
+
+
+def test_fetch_profile_retries_connect_timeout(monkeypatch) -> None:
+    monkeypatch.setattr("verso_framework.providers.zhihu.oauth.time.sleep", lambda _s: None)
+    flaky = _FlakyClient(
+        2,
+        httpx.Response(200, json={"uid": 1, "hash_id": "alice", "fullname": "Alice"}),
+    )
+    client = HttpxOAuthClient(_SETTINGS)
+    monkeypatch.setattr(client, "_client", lambda: flaky)
+    profile = client.fetch_profile("user-tok")
+    assert profile.url_token == "alice"
+    assert flaky.calls == 3
+
+
+def test_fetch_profile_connect_timeout_exhausted(monkeypatch) -> None:
+    monkeypatch.setattr("verso_framework.providers.zhihu.oauth.time.sleep", lambda _s: None)
+    flaky = _FlakyClient(9, httpx.Response(200, json={"uid": 1, "hash_id": "alice"}))
+    client = HttpxOAuthClient(_SETTINGS, retries=3)
+    monkeypatch.setattr(client, "_client", lambda: flaky)
+    with pytest.raises(RuntimeError, match="zhihu profile network error"):
+        client.fetch_profile("user-tok")
+    assert flaky.calls == 3
+
+
+def test_exchange_code_retries_connect_timeout(monkeypatch) -> None:
+    monkeypatch.setattr("verso_framework.providers.zhihu.oauth.time.sleep", lambda _s: None)
+    flaky = _FlakyClient(
+        1,
+        httpx.Response(
+            200,
+            json={"code": 20000, "Data": {"access_token": "user-tok", "expires_in": 3600}},
+        ),
+    )
+    client = HttpxOAuthClient(_SETTINGS)
+    monkeypatch.setattr(client, "_client", lambda: flaky)
+    token = client.exchange_code("from-callback")
+    assert token.access_token == "user-tok"
+    assert flaky.calls == 2
