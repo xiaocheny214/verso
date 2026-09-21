@@ -18,6 +18,7 @@ from verso_app.web.handler import register_exception_handlers
 from verso_common.result import Response
 from verso_framework.config import get_app_settings
 from verso_framework.db import Base, get_engine
+from verso_framework.providers.zhihu.oauth import schedule_openapi_warmup
 
 
 @asynccontextmanager
@@ -35,6 +36,7 @@ async def lifespan(_app: FastAPI):
         )
 
         Base.metadata.create_all(bind=get_engine())
+    schedule_openapi_warmup()
     yield
 
 
