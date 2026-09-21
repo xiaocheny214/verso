@@ -3,7 +3,7 @@
 #   启动服务: docker compose up -d --build
 #   查看日志: docker compose logs -f [service]
 #   停止服务: docker compose down
-#   清理数据: 停掉后删除 ./data/postgres 与 ./data/redis
+#   清理数据: 停掉后删除 ./data/postgres、./data/redis 与 ./data/milvus
 #   重新构建: docker compose up -d --build
 #
 # worker 入口尚未接线，本期不起 worker 容器。
@@ -47,6 +47,31 @@ services:
     networks:
       - verso-net
 
+  # 本地 standalone：内嵌 etcd + 本地盘，不另起 etcd / MinIO。
+  milvus:
+    image: milvusdb/milvus:v2.5.16
+    container_name: verso-milvus
+    command: ["milvus", "run", "standalone"]
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      COMMON_STORAGETYPE: local
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+    volumes:
+      - ./data/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 90s
+    networks:
+      - verso-net
+
   # ── 后端 API 服务 ──
   backend:
     build:
@@ -62,12 +87,15 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
+      MILVUS_URI: http://milvus:19530
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      milvus:
         condition: service_healthy
     networks:
       - verso-net
