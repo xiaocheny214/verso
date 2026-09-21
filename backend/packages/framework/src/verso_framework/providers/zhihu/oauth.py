@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlencode
@@ -23,6 +25,45 @@ _HEADLINE_KEYS = ("headline", "Headline")
 _OPEN_ID_KEYS = ("OpenId", "open_id")
 
 logger = logging.getLogger("verso.zhihu.oauth")
+_RETRYABLE = (httpx.ConnectTimeout, httpx.ConnectError, httpx.ReadTimeout)
+_http_lock = threading.Lock()
+_http: httpx.Client | None = None
+_warmup_started = False
+
+
+def _shared_http(timeout: float) -> httpx.Client:
+    """进程内复用到 openapi.zhihu.com 的 TLS，避免每次登录都握手。"""
+    global _http
+    with _http_lock:
+        if _http is None:
+            _http = httpx.Client(
+                timeout=httpx.Timeout(timeout, connect=min(5.0, timeout)),
+                limits=httpx.Limits(
+                    max_keepalive_connections=4,
+                    max_connections=8,
+                    keepalive_expiry=30.0,
+                ),
+            )
+        return _http
+
+
+def warm_openapi() -> None:
+    """启动时预热 TLS，失败只记日志，不挡进程。"""
+    try:
+        _shared_http(10.0).post(TOKEN_URL, timeout=5.0)
+    except httpx.HTTPError as exc:
+        logger.info("zhihu openapi warmup skipped: %s", type(exc).__name__)
+    else:
+        logger.info("zhihu openapi warmup ok")
+
+
+def schedule_openapi_warmup() -> None:
+    global _warmup_started
+    with _http_lock:
+        if _warmup_started:
+            return
+        _warmup_started = True
+    threading.Thread(target=warm_openapi, daemon=True, name="zhihu-openapi-warmup").start()
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,9 +90,18 @@ class OAuthClient(Protocol):
 
 
 class HttpxOAuthClient:
-    def __init__(self, settings: AppSettings, *, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        settings: AppSettings,
+        *,
+        timeout: float = 10.0,
+        retries: int = 3,
+        backoff: float = 0.2,
+    ) -> None:
         self._settings = settings
         self._timeout = timeout
+        self._retries = max(1, retries)
+        self._backoff = backoff
 
     def authorization_url(self, state: str) -> str:
         query = urlencode(
@@ -66,17 +116,17 @@ class HttpxOAuthClient:
 
     def exchange_code(self, code: str) -> ZhihuToken:
         try:
-            with self._client() as client:
-                response = client.post(
-                    TOKEN_URL,
-                    data={
-                        "app_id": self._settings.zhihu_client_id,
-                        "app_key": self._settings.zhihu_client_secret,
-                        "grant_type": "authorization_code",
-                        "redirect_uri": self._settings.zhihu_redirect_uri,
-                        "code": code,
-                    },
-                )
+            response = self._request(
+                "POST",
+                TOKEN_URL,
+                data={
+                    "app_id": self._settings.zhihu_client_id,
+                    "app_key": self._settings.zhihu_client_secret,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": self._settings.zhihu_redirect_uri,
+                    "code": code,
+                },
+            )
         except httpx.HTTPError as exc:
             raise RuntimeError("zhihu token exchange network error") from exc
         if not response.is_success:
@@ -97,8 +147,7 @@ class HttpxOAuthClient:
     def fetch_profile(self, access_token: str) -> ZhihuProfile:
         headers = {"Authorization": f"Bearer {access_token}"}
         try:
-            with self._client() as client:
-                response = client.get(PROFILE_URL, headers=headers)
+            response = self._request("GET", PROFILE_URL, headers=headers)
         except httpx.HTTPError as exc:
             raise RuntimeError("zhihu profile network error") from exc
         if not response.is_success:
@@ -127,7 +176,28 @@ class HttpxOAuthClient:
         raise RuntimeError(f"zhihu profile missing url_token keys={_key_summary(payload)}")
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(timeout=self._timeout)
+        return _shared_http(self._timeout)
+
+    def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        client = self._client()
+        last: httpx.HTTPError | None = None
+        for attempt in range(1, self._retries + 1):
+            try:
+                return client.request(method, url, **kwargs)
+            except _RETRYABLE as exc:
+                last = exc
+                logger.warning(
+                    "zhihu oauth %s attempt=%s/%s %s",
+                    method.lower(),
+                    attempt,
+                    self._retries,
+                    type(exc).__name__,
+                )
+                if attempt >= self._retries:
+                    break
+                time.sleep(self._backoff * attempt)
+        assert last is not None
+        raise last
 
 
 def _read_object(response: httpx.Response, *, kind: str, allow_invalid: bool = False) -> dict:
