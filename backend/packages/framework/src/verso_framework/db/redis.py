@@ -20,6 +20,7 @@ def _pool() -> redis.ConnectionPool:
     return redis.ConnectionPool.from_url(
         get_redis_settings().url,
         decode_responses=True,
+        socket_timeout=None,
     )
 
 

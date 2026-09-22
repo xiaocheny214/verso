@@ -122,3 +122,13 @@ def test_enqueue_if_stale_skips_fresh(db: Session) -> None:
     )
     assert service.enqueue_if_stale(user_id) is False
     assert QUEUE_KEY not in redis.lists
+
+
+class _BlpopTimeoutRedis(FakeRedis):
+    def blpop(self, keys: list[str] | str, timeout: int = 0) -> tuple[str, str] | None:
+        raise TimeoutError("Timeout reading from socket")
+
+
+def test_pop_treats_blpop_read_timeout_as_empty() -> None:
+    queue = PortraitSyncQueue(_BlpopTimeoutRedis())
+    assert queue.pop(timeout_sec=5) is None
