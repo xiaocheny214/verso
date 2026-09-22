@@ -80,9 +80,10 @@ def zhihu_callback(
     nonce = request.cookies.get("verso_oauth_intent") or state or ""
     result = auth.complete_login(code=auth_code, nonce=nonce)
     try:
-        portrait.sync(result.user.id)
+        if portrait.enqueue_if_stale(result.user.id):
+            logger.info("画像已入队异步同步 user_id=%s", result.user.id)
     except Exception:
-        logger.exception("画像同步失败 user_id=%s", result.user.id)
+        logger.exception("画像入队失败 user_id=%s", result.user.id)
     target = get_app_settings().public_origin.rstrip("/") + "/"
     response = RedirectResponse(url=target, status_code=302)
     _set_session_cookie(response, result.session_id)

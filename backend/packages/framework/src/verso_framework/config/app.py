@@ -13,6 +13,8 @@ from verso_common.constants import (
     REPUTATION_MIN_ACTIVE_SCORE,
     REPUTATION_POOR_DELTA,
     REPUTATION_SCORE_MAX,
+    RETRIEVAL_MIN_SCORE,
+    RETRIEVAL_TOP_K,
 )
 
 
@@ -36,6 +38,11 @@ class AppSettings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = ""
+    llm_embedding_model: str = ""
+    match_retrieval_top_k: int = RETRIEVAL_TOP_K
+    match_retrieval_min_score: float = RETRIEVAL_MIN_SCORE
+    match_title_fallback_when_no_ready: bool = False
+    portrait_sync_inline: bool = True
     reputation_score_max: int = REPUTATION_SCORE_MAX
     reputation_initial_score: int = REPUTATION_INITIAL_SCORE
     reputation_poor_delta: int = REPUTATION_POOR_DELTA

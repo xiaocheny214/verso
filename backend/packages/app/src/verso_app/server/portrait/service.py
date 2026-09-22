@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from verso_app.server.article.service import ArchiveService
@@ -22,7 +23,12 @@ from verso_app.server.portrait.extractor import (
 )
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.portrait.ports import GrantReader
-from verso_common.constants import PORTRAIT_RECENT_DAYS
+from verso_app.server.portrait.queue import PortraitSyncQueue
+from verso_common.constants import (
+    PORTRAIT_RECENT_DAYS,
+    PORTRAIT_SYNC_SCAN_LIMIT,
+    PORTRAIT_SYNC_STALE_DAYS,
+)
 from verso_common.enums import BizCode, PortraitHorizon, PortraitSource, StrengthTag
 from verso_common.exceptions import BizException
 from verso_common.models import PortraitView, Strength, UserCard
@@ -44,12 +50,14 @@ class PortraitService:
         zhihu: UserDataClient,
         classifier: EvidenceClassifier | None = None,
         archive: ArchiveService | None = None,
+        queue: PortraitSyncQueue | None = None,
     ) -> None:
         self._session = session
         self._grants = grants
         self._zhihu = zhihu
         self._classifier = classifier or RuleEvidenceClassifier()
         self._archive = archive
+        self._queue = queue
 
     def card_for(self, user: User) -> UserCard:
         portraits = self._session.scalars(select(Portrait).where(Portrait.user_id == user.id)).all()
@@ -62,13 +70,59 @@ class PortraitService:
             portraits=views,
         )
 
+    def needs_sync(
+        self,
+        user_id: uuid.UUID,
+        *,
+        stale_days: int = PORTRAIT_SYNC_STALE_DAYS,
+    ) -> bool:
+        row = self._session.get(Portrait, (user_id, PortraitHorizon.STABLE.value))
+        if row is None or row.synced_at is None:
+            return True
+        synced = row.synced_at
+        if synced.tzinfo is None:
+            synced = synced.replace(tzinfo=UTC)
+        return synced < datetime.now(UTC) - timedelta(days=stale_days)
+
+    def enqueue_if_stale(self, user_id: uuid.UUID) -> bool:
+        if self._queue is None:
+            return False
+        if not self.needs_sync(user_id):
+            return False
+        return self._queue.enqueue(str(user_id))
+
+    def list_stale_user_ids(
+        self,
+        *,
+        stale_days: int = PORTRAIT_SYNC_STALE_DAYS,
+        limit: int = PORTRAIT_SYNC_SCAN_LIMIT,
+    ) -> list[uuid.UUID]:
+        cutoff = datetime.now(UTC) - timedelta(days=stale_days)
+        stmt = (
+            select(User.id)
+            .outerjoin(
+                Portrait,
+                and_(
+                    Portrait.user_id == User.id,
+                    Portrait.kind == PortraitHorizon.STABLE.value,
+                ),
+            )
+            .where(
+                or_(
+                    Portrait.user_id.is_(None),
+                    Portrait.synced_at.is_(None),
+                    Portrait.synced_at < cutoff,
+                )
+            )
+            .limit(limit)
+        )
+        return list(self._session.scalars(stmt).all())
+
     def sync(self, user_id: uuid.UUID) -> None:
         grant = self._grants.load_grant(str(user_id))
         if not grant:
             raise BizException("授权已过期，请重新登录", code=BizCode.UNAUTHORIZED)
-        contents = _try_list("创作", lambda: self._zhihu.list_contents(grant))
-        followees = _try_list("关注", lambda: self._zhihu.list_followees(grant))
-        favorites = _try_list("收藏", lambda: self._zhihu.list_favorites(grant))
+        contents, followees, favorites = self._fetch_evidence(grant)
         any_ok = contents.ok or followees.ok or favorites.ok
         all_ok = contents.ok and followees.ok and favorites.ok
         if not any_ok:
@@ -110,6 +164,13 @@ class PortraitService:
                 )
             except Exception:
                 logger.exception("创作归档失败，不影响画像 user_id=%s", user_id)
+
+    def _fetch_evidence(self, grant: str) -> tuple[_Fetch, _Fetch, _Fetch]:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            contents_f = pool.submit(_try_list, "创作", lambda: self._zhihu.list_contents(grant))
+            followees_f = pool.submit(_try_list, "关注", lambda: self._zhihu.list_followees(grant))
+            favorites_f = pool.submit(_try_list, "收藏", lambda: self._zhihu.list_favorites(grant))
+            return contents_f.result(), followees_f.result(), favorites_f.result()
 
     def self_report(self, user: User, tags: list[StrengthTag]) -> UserCard:
         stable = self._session.get(Portrait, (user.id, PortraitHorizon.STABLE.value))

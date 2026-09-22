@@ -119,8 +119,8 @@ def test_callback_uses_state_when_intent_cookie_missing(
     started = service.start_login()
 
     class QuietPortrait:
-        def sync(self, user_id) -> None:
-            return None
+        def enqueue_if_stale(self, user_id) -> bool:
+            return False
 
     app = FastAPI()
     register_exception_handlers(app)

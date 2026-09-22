@@ -15,6 +15,7 @@ from verso_app.server.exchange.service import ExchangeService
 from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.extractor import build_evidence_classifier
+from verso_app.server.portrait.queue import PortraitSyncQueue
 from verso_app.server.portrait.service import PortraitService
 from verso_app.server.quality.judge import build_judge
 from verso_app.server.quality.service import QualityService
@@ -57,6 +58,7 @@ def get_portrait_service(session: SessionDep) -> PortraitService:
         zhihu=HttpxUserDataClient(settings),
         classifier=build_evidence_classifier(settings),
         archive=get_archive_service(),
+        queue=PortraitSyncQueue(get_redis()),
     )
 
 

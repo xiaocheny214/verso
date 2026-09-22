@@ -263,7 +263,7 @@ export function PortraitPanel({ user }: { user: UserCard }) {
 
         {emptyPortrait ? (
           <p className="text-xs text-slate-500">
-            还没有抽出擅长。登录时同步失败不会挡住登录，可以再同步一次，或在抽不出时自行补充。
+            画像生成中，后台正在根据知乎授权内容抽取擅长；页面会自动刷新，也可点「重新同步知乎」手动刷新。若长时间仍为空，可在抽不出时自行补充。
           </p>
         ) : null}
 
