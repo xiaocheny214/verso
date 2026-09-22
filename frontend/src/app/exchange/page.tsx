@@ -11,6 +11,7 @@ import {
   Inbox,
   RefreshCw,
   Send,
+  ThumbsDown,
 } from "lucide-react";
 
 import { AppFrame } from "@/components/app-frame";
@@ -24,6 +25,8 @@ import {
   exchangeSessionApi,
 } from "@/model/exchange";
 import type { Exchange, ExchangeMessage } from "@/model/exchange";
+import { qualityApi } from "@/model/quality";
+import type { Review, ReviewVerdict } from "@/model/quality";
 import { ApiError } from "@/lib/http";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -71,6 +74,27 @@ function peerStrengthsLabel(strengths: string[] | undefined): string {
   return strengths.join(" · ");
 }
 
+const VERDICT_PRESENTATIONS: Record<
+  ReviewVerdict,
+  { label: string; detail: string; badgeClass: string }
+> = {
+  poor: {
+    label: "判定为差",
+    detail: "系统认定回答敷衍，会按规则降低对方声望；分数变动只在后端发生。",
+    badgeClass: "text-rose-700 bg-rose-50 border-rose-200",
+  },
+  good: {
+    label: "判定为合格",
+    detail: "回答有效，不会影响对方声望。",
+    badgeClass: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  },
+  unclear: {
+    label: "暂无法判断",
+    detail: "证据不足或复核未成功，不会影响对方声望。",
+    badgeClass: "text-amber-700 bg-amber-50 border-amber-200",
+  },
+};
+
 function ExchangePageContent() {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -80,6 +104,9 @@ function ExchangePageContent() {
 
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<Record<string, Review>>({});
+  const [reviewedPairs, setReviewedPairs] = useState<Record<string, true>>({});
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const pairsQuery = useQuery({
     queryKey: exchangeListQueryKey,
@@ -170,6 +197,37 @@ function ExchangePageContent() {
     },
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: (id: string) => qualityApi.review(id),
+    onSuccess: (result) => {
+      setReviewError(null);
+      setReviews((prev) => ({ ...prev, [result.exchange_id]: result }));
+      setReviewedPairs((prev) => ({ ...prev, [result.exchange_id]: true }));
+    },
+    onError: (error) => {
+      if (
+        error instanceof ApiError &&
+        error.code === 409 &&
+        error.message.includes("已经评估过对方")
+      ) {
+        if (exchangeId != null) {
+          setReviewedPairs((prev) => ({ ...prev, [exchangeId]: true }));
+        }
+        setReviewError(null);
+        return;
+      }
+      setReviewError(
+        error instanceof Error && error.message
+          ? error.message
+          : "质量复核请求失败",
+      );
+    },
+  });
+
+  const review = exchangeId != null ? (reviews[exchangeId] ?? null) : null;
+  const alreadyReviewed =
+    exchangeId != null && reviewedPairs[exchangeId] === true;
+
   function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
@@ -178,12 +236,73 @@ function ExchangePageContent() {
   }
 
   function openPair(id: string) {
+    setReviewError(null);
     router.replace(`/exchange?pair_id=${encodeURIComponent(id)}`);
   }
 
   function refresh() {
     void exchangeQuery.refetch();
     void messagesQuery.refetch();
+  }
+
+  function renderQualityReview() {
+    if (review != null) {
+      const presentation = VERDICT_PRESENTATIONS[review.verdict];
+      return (
+        <div className="p-4 pt-3 border-t border-slate-100 space-y-1.5">
+          <Badge
+            variant="outline"
+            className={cn("text-[10px]", presentation.badgeClass)}
+          >
+            质量复核：{presentation.label}
+          </Badge>
+          {review.reason && (
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              {review.reason}
+            </p>
+          )}
+          <p className="text-[11px] text-slate-400">{presentation.detail}</p>
+        </div>
+      );
+    }
+
+    if (alreadyReviewed) {
+      return (
+        <div className="p-4 pt-3 border-t border-slate-100">
+          <p className="text-[11px] text-slate-500">
+            你已评估过对方，这一对不能再评。
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-4 pt-3 border-t border-slate-100 space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            觉得对方答得敷衍？点「不满意」后，系统才会用你本轮的问题和对方在这对里的全部留言做一次复核；只有判定为差才会影响对方声望。
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 text-rose-600 hover:text-rose-700"
+            disabled={reviewMutation.isPending}
+            onClick={() => {
+              if (exchangeId != null) reviewMutation.mutate(exchangeId);
+            }}
+          >
+            <ThumbsDown className="h-3 w-3" />
+            <span>{reviewMutation.isPending ? "复核中…" : "不满意"}</span>
+          </Button>
+        </div>
+        {reviewError && (
+          <p className="text-xs text-rose-600" role="alert">
+            {reviewError}
+          </p>
+        )}
+      </div>
+    );
   }
 
   function renderWorkbench() {
@@ -357,6 +476,8 @@ function ExchangePageContent() {
                 </div>
               )}
             </CardContent>
+
+            {peerMessages.length > 0 && renderQualityReview()}
           </Card>
 
           {/* My Answer to Peer */}
