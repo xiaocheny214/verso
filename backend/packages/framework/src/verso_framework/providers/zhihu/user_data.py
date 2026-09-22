@@ -7,6 +7,8 @@ HTTP 非 2xx，或业务码既不是文档约定的 0、也不是 OAuth 实测�
 
 from __future__ import annotations
 
+import logging
+import threading
 from dataclasses import dataclass
 from time import time
 from typing import Protocol
@@ -19,6 +21,26 @@ API_BASE = "https://developer.zhihu.com"
 _FAVLIST_SCAN = 3
 # user-api.md / http-api.md 成功码是 Code:0；OAuth 名片实测还有 lowercase code:20000。
 _ZHIHU_OK = frozenset({0, 20000})
+
+logger = logging.getLogger("verso.zhihu.user_data")
+_http_lock = threading.Lock()
+_http: httpx.Client | None = None
+
+
+def _shared_http(timeout: float) -> httpx.Client:
+    """进程内复用到 developer.zhihu.com 的 TLS，避免画像拉取每次握手。"""
+    global _http
+    with _http_lock:
+        if _http is None:
+            _http = httpx.Client(
+                timeout=httpx.Timeout(timeout, connect=min(5.0, timeout)),
+                limits=httpx.Limits(
+                    max_keepalive_connections=4,
+                    max_connections=8,
+                    keepalive_expiry=30.0,
+                ),
+            )
+        return _http
 
 
 class ZhihuUserDataError(RuntimeError):
@@ -153,7 +175,7 @@ class HttpxUserDataClient:
         return [_collection_from_raw(raw) for raw in _items(payload)]
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(timeout=self._timeout)
+        return _shared_http(self._timeout)
 
     def _get(self, path: str, access_token: str, params: dict[str, str]) -> dict:
         headers = {
@@ -163,8 +185,7 @@ class HttpxUserDataClient:
             "Content-Type": "application/json",
         }
         try:
-            with self._client() as client:
-                response = client.get(f"{API_BASE}{path}", headers=headers, params=params)
+            response = self._client().get(f"{API_BASE}{path}", headers=headers, params=params)
         except httpx.HTTPError as exc:
             raise ZhihuUserDataError(f"zhihu GET {path} network error") from exc
         if not response.is_success:
