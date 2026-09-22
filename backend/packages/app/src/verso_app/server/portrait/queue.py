@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from redis.exceptions import TimeoutError as RedisTimeoutError
+
 from verso_common.constants import PORTRAIT_SYNC_PENDING_TTL_SEC
 
 QUEUE_KEY = "portrait:sync:queue"
@@ -45,7 +47,11 @@ class PortraitSyncQueue:
         return True
 
     def pop(self, *, timeout_sec: int = 5) -> str | None:
-        item = self._redis.blpop(QUEUE_KEY, timeout=max(timeout_sec, 0))
+        try:
+            item = self._redis.blpop(QUEUE_KEY, timeout=max(timeout_sec, 0))
+        except (RedisTimeoutError, TimeoutError):
+            # redis-py：空队列 BLPOP 超时时可能抛读超时而非返回 None，poller 须继续循环。
+            return None
         if item is None:
             return None
         _key, user_id = item
