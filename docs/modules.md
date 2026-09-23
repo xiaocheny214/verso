@@ -3,6 +3,7 @@
 ```text
 auth         认证授权
 portrait     用户画像
+knowledge    用户知识库与文章归属
 match        匹配条件 + 配对
 exchange     一对上的多轮消息
 quality      质量评估
@@ -36,6 +37,23 @@ reputation   声望
 **怎么配合**
 
 `match` 判断两边会不会教对方想学的，读的是这里的画像。页面上展示的擅长，也是这里的画像。
+
+---
+
+## knowledge
+
+用户拥有的知识库，以及授权文章在知识库中的归属。
+
+**边界**
+
+- 只管理知识库、文章归属、知识库内文章列表和归档队列。
+- 每个知识库只属于一个用户；跨用户资源统一按不存在处理。
+- 文章正文仍在对象存储，`user_articles` 只保存元数据和 `knowledge_base_id`。
+- 旧的 `/me/articles/queue` 和 `/me/articles/browser-capture` 继续使用用户的默认知识库。
+
+**怎么配合**
+
+`portrait` 同步用户创作列表时，把可归档内容登记到默认知识库。后续检索或意图模块只读取 owner 自己的知识库，不改变 `match` 的配对职责。
 
 ---
 

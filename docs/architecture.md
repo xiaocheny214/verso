@@ -8,7 +8,7 @@
 认证 → 画像 → 双向互补匹配 → 异步交流 → 质量评估 → 声望
 ```
 
-旧的 `article / presence / invite / room / map / feed` 主路径已被取代，不再据此新增接口、表或任务。现存空包可以在后续清理 Issue 中删除，不能被当作当前规格。
+旧的 `article / presence / invite / room / map / feed` 主路径已被取代，不再据此新增接口、表或任务。现存空包可以在后续清理 Issue 中删除，不能被当作当前规格。当前的 `article` 是授权创作正文归档基础设施，不是旧的 Article Pool 业务模块。
 
 ## 一、仓库与运行单元
 
@@ -53,6 +53,7 @@ verso_common
 |---|---|---|
 | `auth` | OAuth、站内用户、授权数据、初始化声望 | 抽取擅长、决定匹配对象 |
 | `portrait` | 从授权数据源生成擅长画像 | 登录、存 token、决定匹配对象 |
+| `knowledge` | 用户知识库、文章归属、owner-scoped 归档读取 | 分块、向量写入、匹配配对、站内问答 |
 | `match` | 求知 Ticket、双向互补条件、配对结果 | 对话消息、回答质量、长期分数 |
 | `exchange` | 一次配对关系、24 小时异步消息、结束状态 | 重新计算匹配、修改画像 |
 | `quality` | 人先触发的回答评估、评估证据和裁决 | 自行监听每条消息、直接冻结资格 |
@@ -62,6 +63,7 @@ verso_common
 
 - 用户、session 和授权 token 只由 `auth` 写。
 - 画像只由 `portrait` 写。
+- 知识库和文章归属只由 `knowledge` / `article` 写。
 - Ticket 和配对状态只由 `match` 写。
 - Exchange 和消息只由 `exchange` 写。
 - Review 只由 `quality` 写。
@@ -73,6 +75,7 @@ verso_common
 ```text
 web ── OAuth ──► auth ──► 用户
 web ── 授权数据 ──► portrait ──► 擅长画像
+portrait ── 创作列表 ──► article ──► knowledge
 web ── 本次想学 ──► match.Ticket
 match ── 双向 covers ──► Match ──► exchange.Exchange
 web ── 异步留言 ──► exchange.Message
@@ -155,6 +158,10 @@ good / unclear / 模型失败 → 不处罚
 
 PostgreSQL 保存业务事实：用户、画像、Ticket、Match、Exchange、Message、Review、Reputation。具体表结构跟随各模块实现 Issue，不在总架构中提前冻结。
 
+授权文章归档使用两层存储：`user_articles` 保存用户、来源 URL、状态和对象 key；正文 Markdown 保存到对象存储。`knowledge_bases` 由用户拥有，`user_articles.knowledge_base_id` 必须指向同一用户的知识库。
+
+当前仓库尚未引入 Alembic。应用在创建表模式启动时会执行可重复的知识库兼容迁移：补充旧 `user_articles` 的 `knowledge_base_id`，为已有文章的用户创建 `Default` 知识库并完成回填。正式引入迁移工具后，应将该逻辑迁移到版本化 migration。
+
 Redis 保存短期凭证、session、OAuth intent、用户授权 token、幂等键和必要缓存。它不是异步消息的唯一存储。
 
 `worker` 只处理可重试的后台任务，例如画像同步、等待池重试、Exchange 过期和质量评估。业务状态变化仍通过对应 `server` 服务完成。
@@ -165,6 +172,7 @@ FastAPI 生成的 OpenAPI 是唯一接口契约。接口名称随实现 Issue �
 
 - `auth / me` → `auth`
 - `portrait` → `portrait`
+- `knowledge-bases / knowledge-bases/{id}/articles` → `knowledge`
 - `tickets / matches` → `match`
 - `exchanges / messages` → `exchange`
 - `reviews` → `quality`

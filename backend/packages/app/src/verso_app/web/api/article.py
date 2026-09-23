@@ -53,8 +53,14 @@ def _failed_list(
     archive: ArchiveService,
     store: SessionStore,
     user: User,
+    knowledge_base_id: uuid.UUID | None = None,
 ) -> FailedFetchListView:
-    items = [_view(row) for row in archive.list_failed_fetch(session, user_id=user.id)]
+    items = [
+        _view(row)
+        for row in archive.list_failed_fetch(
+            session, user_id=user.id, knowledge_base_id=knowledge_base_id
+        )
+    ]
     token = store.put_capture_token(str(user.id)) if items else ""
     return FailedFetchListView(items=items, capture_token=token)
 
@@ -64,9 +70,15 @@ def _queue_view(
     archive: ArchiveService,
     store: SessionStore,
     user: User,
+    knowledge_base_id: uuid.UUID | None = None,
 ) -> ArchiveQueueView:
-    items = [_view(row) for row in archive.list_queue(session, user_id=user.id)]
-    pending_count, failed_count, ready_count = archive.queue_counts(session, user_id=user.id)
+    items = [
+        _view(row)
+        for row in archive.list_queue(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
+    ]
+    pending_count, failed_count, ready_count = archive.queue_counts(
+        session, user_id=user.id, knowledge_base_id=knowledge_base_id
+    )
     token = store.put_capture_token(str(user.id)) if items else ""
     return ArchiveQueueView(
         items=items,
