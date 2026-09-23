@@ -1,6 +1,8 @@
 """进程级应用配置：Cookie Session、知乎 OAuth、成色阈值、质量路径用的模型。
 
 密钥不进仓库。字段前缀 ``VERSO_``。
+``llm_base_url`` / ``llm_api_key`` 指向 LiteLLM 代理，``llm_model`` 与
+``llm_embedding_model`` 是代理别名。上游地址和密钥只放在 ``LITELLM_*``。
 """
 
 from functools import lru_cache
