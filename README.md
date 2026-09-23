@@ -32,6 +32,7 @@ Same-topic, same-article, and same-question pairing are out of scope. Authorized
 ## Resources
 
 - Product proposal: [#30](https://github.com/xiaocheny214/verso/issues/30)
+- Codebase map: [docs/codebase-map.md](docs/codebase-map.md)
 - How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---

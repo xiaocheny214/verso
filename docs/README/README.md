@@ -32,3 +32,9 @@
 ## 许可
 
 专有商业许可，见 [LICENSE](../../LICENSE)。
+
+## 开发记录
+
+- [代码结构记录](../codebase-map.md)
+- [架构说明](../architecture.md)
+- [模块边界](../modules.md)
