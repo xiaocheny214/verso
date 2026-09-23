@@ -1,0 +1,36 @@
+# LiteLLM Proxy。应用只认这里的别名（chat / embed / rerank）。
+# 上游地址和密钥来自环境变量，不写进这个文件。
+#
+# 同一个 model_name 只有一条 deployment 时，429 不会改道到别的模型。
+# 它会按 num_retries 对这一条做退避重试，并把该 deployment 冷却约 5 秒。
+# 要在 429 或连接失败后改打另一家，给同一个 model_name 再加一条 deployment。
+# 要在这个别名整组失败后改打另一个别名，再配 router_settings.fallbacks。默认没有。
+
+model_list:
+  - model_name: chat
+    litellm_params:
+      model: os.environ/LITELLM_CHAT_MODEL
+      api_base: os.environ/LITELLM_CHAT_API_BASE
+      api_key: os.environ/LITELLM_CHAT_API_KEY
+
+  - model_name: embed
+    litellm_params:
+      model: os.environ/LITELLM_EMBED_MODEL
+      api_base: os.environ/LITELLM_EMBED_API_BASE
+      api_key: os.environ/LITELLM_EMBED_API_KEY
+
+  - model_name: rerank
+    litellm_params:
+      model: os.environ/LITELLM_RERANK_MODEL
+      api_base: os.environ/LITELLM_RERANK_API_BASE
+      api_key: os.environ/LITELLM_RERANK_API_KEY
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 2
+  timeout: 120
+  allowed_fails: 1
+  cooldown_time: 5
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
