@@ -232,28 +232,6 @@
       },
       "KnowledgeBaseCreateBody": {
         "properties": {
-          "collection": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection"
-          },
-          "embedding_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding Model"
-          },
           "name": {
             "minLength": 1,
             "title": "Name",
@@ -280,28 +258,6 @@
       },
       "KnowledgeBasePatchBody": {
         "properties": {
-          "collection": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection"
-          },
-          "embedding_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding Model"
-          },
           "name": {
             "anyOf": [
               {

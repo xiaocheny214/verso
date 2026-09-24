@@ -537,10 +537,6 @@ export interface components {
         };
         /** KnowledgeBaseCreateBody */
         KnowledgeBaseCreateBody: {
-            /** Collection */
-            collection?: string | null;
-            /** Embedding Model */
-            embedding_model?: string | null;
             /** Name */
             name: string;
             /** Storage Profile Id */
@@ -548,10 +544,6 @@ export interface components {
         };
         /** KnowledgeBasePatchBody */
         KnowledgeBasePatchBody: {
-            /** Collection */
-            collection?: string | null;
-            /** Embedding Model */
-            embedding_model?: string | null;
             /** Name */
             name?: string | null;
             /** Storage Profile Id */

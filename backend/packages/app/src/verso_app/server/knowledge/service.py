@@ -23,8 +23,6 @@ class KnowledgeService:
         *,
         user_id: uuid.UUID,
         name: str,
-        embedding_model: str | None = None,
-        collection: str | None = None,
         storage_profile_id: uuid.UUID | None = None,
     ) -> KnowledgeBase:
         clean_name = name.strip()
@@ -35,12 +33,8 @@ class KnowledgeService:
         row = KnowledgeBase(
             user_id=user_id,
             name=clean_name,
-            embedding_model=(
-                get_app_settings().llm_embedding_model
-                if embedding_model is None
-                else embedding_model
-            ),
-            collection=(get_milvus_settings().collection if collection is None else collection),
+            embedding_model=get_app_settings().llm_embedding_model,
+            collection=get_milvus_settings().collection,
             storage_profile_id=storage_profile_id,
         )
         db.add(row)
@@ -76,8 +70,6 @@ class KnowledgeService:
         user_id: uuid.UUID,
         knowledge_base_id: uuid.UUID,
         name: str | None = None,
-        embedding_model: str | None = None,
-        collection: str | None = None,
         storage_profile_id: uuid.UUID | None = None,
         update_storage_profile: bool = False,
     ) -> KnowledgeBase:
@@ -90,10 +82,6 @@ class KnowledgeService:
             if duplicate is not None:
                 raise BizException("知识库名称已存在", code=BizCode.CONFLICT)
             row.name = clean_name
-        if embedding_model is not None:
-            row.embedding_model = embedding_model
-        if collection is not None:
-            row.collection = collection
         if update_storage_profile:
             row.storage_profile_id = storage_profile_id
         db.flush()
