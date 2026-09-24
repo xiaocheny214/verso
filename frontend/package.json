@@ -15,7 +15,7 @@
     "openapi:export": "uv --directory ../backend run python scripts/export_openapi.py ../openapi/openapi.json",
     "openapi:generate": "openapi-typescript ../openapi/openapi.json -o src/lib/api/schema.d.ts",
     "openapi:sync": "pnpm openapi:export && pnpm openapi:generate",
-    "openapi:check": "uv --directory ../backend run python scripts/export_openapi.py ../openapi/openapi.json --check && openapi-typescript ../openapi/openapi.json | diff - src/lib/api/schema.d.ts"
+    "openapi:check": "uv --directory ../backend run python scripts/export_openapi.py ../openapi/openapi.json --check && node scripts/check-openapi-types.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
