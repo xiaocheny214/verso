@@ -55,7 +55,7 @@ B 是教练，想搞懂互联网
 5. `quality`：对方不满意后评估本次回答。
 6. `reputation`：记录评估结果和匹配资格。
 
-模块边界以 [#31](https://github.com/xiaocheny214/verso/issues/31) 和 [`architecture.md`](architecture.md) 为准。
+模块边界以 [#31](https://github.com/xiaocheny214/verso/issues/31) 为准。
 
 ## 5. MVP 范围
 

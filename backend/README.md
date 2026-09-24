@@ -1,6 +1,6 @@
 # Verso backend
 
-uv workspace：`common → framework → app`。分层说明见 [`docs/architecture.md`](../docs/architecture.md)。
+uv workspace：`common → framework → app`。
 产品模块以 [#30](https://github.com/xiaocheny214/verso/issues/30) / [#31](https://github.com/xiaocheny214/verso/issues/31) 为准：`auth` / `portrait` / `match` / `exchange` / `quality` / `reputation`。
 
 ```bash
@@ -54,7 +54,7 @@ OpenAPI 文档由 FastAPI 提供：启动后访问 `http://localhost:8000/docs`�
 - `POST /exchanges/{id}/close` 任一方结束
 - 消息只属于这一对，不另存一份「我和谁配上了」
 
-本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用起来时会建 `users` / `portraits` / `reputations` / `match_conditions` / `exchanges` / `messages`。
+本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用启动时会由 ORM 创建缺失表，并按 `migration/` 下的版本顺序执行数据库迁移。
 
 入口：
 

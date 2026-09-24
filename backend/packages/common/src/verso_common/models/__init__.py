@@ -47,6 +47,14 @@ class ArticleArchiveView(BaseModel):
     error_class: str | None = None
 
 
+class KnowledgeBaseView(BaseModel):
+    id: str
+    name: str
+    embedding_model: str
+    collection: str
+    storage_profile_id: str | None = None
+
+
 class FailedFetchListView(BaseModel):
     items: list[ArticleArchiveView] = Field(default_factory=list)
     capture_token: str = ""

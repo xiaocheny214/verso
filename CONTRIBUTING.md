@@ -4,7 +4,7 @@
 
 项目按 `Proposal → Issue → 分支 → PR → Review → 合并` 推进：所有改动从 Issue 出发，代码经 PR 合入 `main`。第一次参与，按本文档顺序读下来即可跑通全流程。
 
-产品规格以 [#30 产品策划案](https://github.com/xiaocheny214/verso/issues/30) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。后端包分层与领域边界以 [`docs/architecture.md`](docs/architecture.md) 与 [#31](https://github.com/xiaocheny214/verso/issues/31) 为准（提案只写文档，代码另开 feat Issue）。本期只打磨最小 MVP 主路径（认证 → 画像 → 双向互补匹配 → 异步交流 → 质量评估）。同文章在场、实时邀请、限时房间、Feed 与 Map 已退出范围，不要用 PR 夹带进来。
+产品规格以 [#30 产品策划案](https://github.com/xiaocheny214/verso/issues/30) 与 [`docs/product-proposal.md`](docs/product-proposal.md) 为准。后端包分层与领域边界以 [#31](https://github.com/xiaocheny214/verso/issues/31) 为准（提案只写文档，代码另开 feat Issue）。本期只打磨最小 MVP 主路径（认证 → 画像 → 双向互补匹配 → 异步交流 → 质量评估）。同文章在场、实时邀请、限时房间、Feed 与 Map 已退出范围，不要用 PR 夹带进来。
 
 ## 许可
 

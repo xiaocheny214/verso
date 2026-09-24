@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from verso_app.server.knowledge.models import KnowledgeBase  # noqa: F401
 from verso_common.enums import ArticleStatus
 from verso_framework.db.base import Base
 
@@ -21,6 +22,11 @@ class UserArticle(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    knowledge_base_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("knowledge_bases.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[str] = mapped_column(String(32), nullable=False)

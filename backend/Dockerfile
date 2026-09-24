@@ -18,16 +18,17 @@ ENV UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/ \
 WORKDIR /app
 
 # 先拷贝依赖定义，利用 Docker layer cache
-COPY pyproject.toml uv.lock ./
-COPY packages/common/pyproject.toml packages/common/
-COPY packages/framework/pyproject.toml packages/framework/
-COPY packages/app/pyproject.toml packages/app/
+COPY backend/pyproject.toml backend/uv.lock ./
+COPY backend/packages/common/pyproject.toml packages/common/
+COPY backend/packages/framework/pyproject.toml packages/framework/
+COPY backend/packages/app/pyproject.toml packages/app/
 
 # 安装第三方依赖（不含 workspace 包、不含 dev）
 RUN uv sync --frozen --no-dev --no-install-workspace
 
 # 拷贝源码并安装 workspace 包
-COPY packages/ packages/
+COPY backend/packages/ packages/
+COPY migration/ /app/migration/
 RUN uv sync --frozen --no-dev
 
 # ── 阶段 2: 运行时 ──
@@ -37,6 +38,7 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/packages /app/packages
+COPY --from=builder /app/migration /app/migration
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
