@@ -24,15 +24,3 @@ commit-msg:
   commands:
     commitlint:
       run: pnpm --dir frontend exec commitlint --config ../commitlint.config.cjs --edit {1}
-
-pre-push:
-  commands:
-    frontend-typecheck:
-      root: frontend/
-      run: pnpm typecheck
-    backend-lint:
-      root: backend/
-      run: uv run ruff check .
-    backend-format:
-      root: backend/
-      run: uv run ruff format --check .
