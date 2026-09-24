@@ -31,6 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -40,7 +42,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install frontend
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install backend (OpenAPI export)
         working-directory: backend
         run: uv sync --group dev
@@ -55,6 +57,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -62,7 +66,7 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install commitlint
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Lint commits against base
         working-directory: frontend
         run: pnpm exec commitlint --config ../commitlint.config.cjs --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
