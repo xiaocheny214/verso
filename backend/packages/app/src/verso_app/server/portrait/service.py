@@ -12,7 +12,6 @@ from hashlib import sha256
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
 from verso_app.server.portrait.extractor import (
     EvidenceClassifier,
@@ -49,14 +48,12 @@ class PortraitService:
         grants: GrantReader,
         zhihu: UserDataClient,
         classifier: EvidenceClassifier | None = None,
-        archive: ArchiveService | None = None,
         queue: PortraitSyncQueue | None = None,
     ) -> None:
         self._session = session
         self._grants = grants
         self._zhihu = zhihu
         self._classifier = classifier or RuleEvidenceClassifier()
-        self._archive = archive
         self._queue = queue
 
     def card_for(self, user: User) -> UserCard:
@@ -157,13 +154,6 @@ class PortraitService:
             window_end=now,
             synced_at=now,
         )
-        if self._archive is not None and contents.ok:
-            try:
-                self._archive.enqueue_listed_contents(
-                    self._session, user_id=user_id, contents=contents.items
-                )
-            except Exception:
-                logger.exception("创作归档失败，不影响画像 user_id=%s", user_id)
 
     def _fetch_evidence(self, grant: str) -> tuple[_Fetch, _Fetch, _Fetch]:
         with ThreadPoolExecutor(max_workers=3) as pool:

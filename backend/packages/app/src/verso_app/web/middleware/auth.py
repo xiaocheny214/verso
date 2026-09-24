@@ -7,10 +7,10 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
+from verso_app.server.collect.service import CollectService
 from verso_app.server.exchange.service import ExchangeService
 from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
@@ -46,8 +46,8 @@ def get_auth_service(session: SessionDep) -> AuthService:
     )
 
 
-def get_archive_service() -> ArchiveService:
-    return ArchiveService()
+def get_collect_service() -> CollectService:
+    return CollectService()
 
 
 def get_portrait_service(session: SessionDep) -> PortraitService:
@@ -57,7 +57,6 @@ def get_portrait_service(session: SessionDep) -> PortraitService:
         grants=get_session_store(),
         zhihu=HttpxUserDataClient(settings),
         classifier=build_evidence_classifier(settings),
-        archive=get_archive_service(),
         queue=PortraitSyncQueue(get_redis()),
     )
 
