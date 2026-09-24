@@ -54,7 +54,7 @@ OpenAPI 文档由 FastAPI 提供：启动后访问 `http://localhost:8000/docs`�
 - `POST /exchanges/{id}/close` 任一方结束
 - 消息只属于这一对，不另存一份「我和谁配上了」
 
-本地首次启动前设置 `VERSO_CREATE_TABLES=true`，应用启动时会由 ORM 创建缺失表，并按 `migration/` 下的版本顺序执行数据库迁移。
+本地首次启动前设置 `VERSO_CREATE_TABLES=true`。应用启动时由 ORM 创建缺失表；`migration/` 只按文件名顺序修改已经存在的表，不负责建表。约定见 [`migration/README.md`](../migration/README.md)。
 
 入口：
 

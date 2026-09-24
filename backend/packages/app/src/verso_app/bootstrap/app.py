@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
 from verso_app.web.api import (
-    article_router,
     auth_router,
+    collect_router,
     exchange_router,
     knowledge_router,
     match_router,
@@ -28,8 +28,8 @@ from verso_framework.providers.zhihu.oauth import schedule_openapi_warmup
 async def lifespan(_app: FastAPI):
     settings = get_app_settings()
     if settings.create_tables:
-        from verso_app.server.article import models as article_models  # noqa: F401
         from verso_app.server.auth import models as auth_models  # noqa: F401
+        from verso_app.server.collect import models as collect_models  # noqa: F401
         from verso_app.server.exchange import models as exchange_models  # noqa: F401
         from verso_app.server.knowledge import models as knowledge_models  # noqa: F401
         from verso_app.server.match import models as match_models  # noqa: F401
@@ -40,7 +40,12 @@ async def lifespan(_app: FastAPI):
         )
 
         engine = get_engine()
-        is_new_database = not inspect(engine).has_table("user_articles")
+        inspector = inspect(engine)
+        has_legacy_articles = inspector.has_table("user_articles")
+        has_collection_records = inspector.has_table("article_collection_records")
+        is_new_database = not has_legacy_articles and not has_collection_records
+        if has_legacy_articles and not has_collection_records:
+            run_pending_migrations(engine)
         Base.metadata.create_all(bind=engine)
         run_pending_migrations(engine, baseline=is_new_database)
     schedule_openapi_warmup()
@@ -68,7 +73,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(auth_router)
     app.include_router(portrait_router)
-    app.include_router(article_router)
+    app.include_router(collect_router)
     app.include_router(knowledge_router)
     app.include_router(match_router)
     app.include_router(exchange_router)

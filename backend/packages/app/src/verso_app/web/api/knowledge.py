@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 from verso_app.server.auth.models import User
 from verso_app.server.knowledge.models import KnowledgeBase
 from verso_app.server.knowledge.service import KnowledgeService
-from verso_app.web.api.article import (
-    ArchiveDep,
+from verso_app.web.api.collect import (
     BrowserCaptureBody,
+    CollectDep,
     StoreDep,
     _failed_list,
     _queue_view,
@@ -134,13 +134,11 @@ def list_knowledge_base_articles(
     knowledge_base_id: uuid.UUID,
     session: SessionDep,
     knowledge: KnowledgeDep,
-    archive: ArchiveDep,
+    collect: CollectDep,
     user: UserDep,
 ) -> ApiResponse[list[ArticleArchiveView]]:
     knowledge.get(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
-    rows = archive.list_by_knowledge_base(
-        session, user_id=user.id, knowledge_base_id=knowledge_base_id
-    )
+    rows = collect.list_by_user(session, user_id=user.id)
     return ApiResponse.success([_view(row) for row in rows])
 
 
@@ -149,20 +147,12 @@ def list_knowledge_base_queue(
     knowledge_base_id: uuid.UUID,
     session: SessionDep,
     knowledge: KnowledgeDep,
-    archive: ArchiveDep,
+    collect: CollectDep,
     store: StoreDep,
     user: UserDep,
 ) -> ApiResponse[ArchiveQueueView]:
     knowledge.get(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
-    return ApiResponse.success(
-        _queue_view(
-            session,
-            archive,
-            store,
-            user,
-            knowledge_base_id=knowledge_base_id,
-        )
-    )
+    return ApiResponse.success(_queue_view(session, collect, store, user))
 
 
 @router.get("/me/knowledge-bases/{knowledge_base_id}/articles/failed-fetch")
@@ -170,20 +160,12 @@ def list_knowledge_base_failed_fetch(
     knowledge_base_id: uuid.UUID,
     session: SessionDep,
     knowledge: KnowledgeDep,
-    archive: ArchiveDep,
+    collect: CollectDep,
     store: StoreDep,
     user: UserDep,
 ) -> ApiResponse[FailedFetchListView]:
     knowledge.get(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
-    return ApiResponse.success(
-        _failed_list(
-            session,
-            archive,
-            store,
-            user,
-            knowledge_base_id=knowledge_base_id,
-        )
-    )
+    return ApiResponse.success(_failed_list(session, collect, store, user))
 
 
 @router.post("/me/knowledge-bases/{knowledge_base_id}/articles/browser-capture")
@@ -192,7 +174,7 @@ def capture_knowledge_base_article(
     body: BrowserCaptureBody,
     session: SessionDep,
     knowledge: KnowledgeDep,
-    archive: ArchiveDep,
+    collect: CollectDep,
     store: StoreDep,
 ) -> ApiResponse[ArticleArchiveView]:
     user_id = store.user_id_for_capture(body.token)
@@ -202,10 +184,9 @@ def capture_knowledge_base_article(
     if user is None:
         raise BizException("补抓凭证无效或已过期", code=BizCode.UNAUTHORIZED)
     knowledge.get(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
-    row = archive.capture_from_browser(
+    row = collect.capture_from_browser(
         session,
         user_id=user.id,
-        knowledge_base_id=knowledge_base_id,
         source_url=body.source_url,
         html=body.html,
         title=body.title,

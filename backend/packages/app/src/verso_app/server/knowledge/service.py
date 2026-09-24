@@ -1,14 +1,13 @@
-"""知识库 CRUD、租户隔离和旧文章归属回填。"""
+"""知识库 CRUD 与租户隔离。采集记录不属于知识库。"""
 
 from __future__ import annotations
 
 import re
 import uuid
 
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from verso_app.server.article.models import UserArticle
 from verso_app.server.knowledge.models import KnowledgeBase
 from verso_common.enums import BizCode
 from verso_common.exceptions import BizException
@@ -109,8 +108,6 @@ class KnowledgeService:
 
     def delete(self, db: Session, *, user_id: uuid.UUID, knowledge_base_id: uuid.UUID) -> None:
         row = self.get(db, user_id=user_id, knowledge_base_id=knowledge_base_id)
-        if db.scalar(select(exists().where(UserArticle.knowledge_base_id == row.id))):
-            raise BizException("知识库仍包含文章，不能删除", code=BizCode.CONFLICT)
         db.delete(row)
         db.flush()
 
@@ -119,23 +116,6 @@ class KnowledgeService:
         if row is not None:
             return row
         return self.create(db, user_id=user_id, name="Default")
-
-    def backfill_default_knowledge_bases(self, db: Session) -> None:
-        """为已有文章的用户创建 Default，并把孤立文章挂上去。"""
-        user_ids = list(
-            db.scalars(
-                select(UserArticle.user_id)
-                .where(UserArticle.knowledge_base_id.is_(None))
-                .distinct()
-            )
-        )
-        for user_id in user_ids:
-            base = self.get_or_create_default(db, user_id=user_id)
-            db.query(UserArticle).filter(
-                UserArticle.user_id == user_id,
-                UserArticle.knowledge_base_id.is_(None),
-            ).update({"knowledge_base_id": base.id}, synchronize_session=False)
-        db.flush()
 
     def _resolve_collection_name(
         self,

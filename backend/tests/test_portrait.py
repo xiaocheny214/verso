@@ -2,13 +2,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fakes import FakeOAuth, FakeRedis, FakeZhihu
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from verso_app.server.auth.models import User  # noqa: F401
 from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
+from verso_app.server.collect.models import ArticleCollectionRecord
 from verso_app.server.portrait.models import Portrait
 from verso_app.server.portrait.service import PortraitService
 from verso_app.server.portrait.tagger import tags_from_text
@@ -65,13 +66,11 @@ def _portrait(
     db: Session,
     redis: FakeRedis,
     zhihu: FakeZhihu | None = None,
-    archive=None,
 ) -> PortraitService:
     return PortraitService(
         session=db,
         grants=SessionStore(redis),
         zhihu=zhihu or FakeZhihu(),
-        archive=archive,
     )
 
 
@@ -225,11 +224,9 @@ def test_empty_zhihu_data_still_allows_self_report(db: Session, settings: AppSet
     assert stable.strengths[0].source == PortraitSource.SELF_REPORTED
 
 
-def test_archive_ingest_failure_does_not_block_sync(db: Session, settings: AppSettings) -> None:
-    class BoomArchive:
-        def enqueue_listed_contents(self, *args, **kwargs) -> None:
-            raise RuntimeError("archive down")
-
+def test_portrait_sync_does_not_register_collection_records(
+    db: Session, settings: AppSettings
+) -> None:
     redis = FakeRedis()
     zhihu = FakeZhihu(
         contents=[
@@ -244,7 +241,5 @@ def test_archive_ingest_failure_does_not_block_sync(db: Session, settings: AppSe
     )
     auth = _auth(db, settings, redis=redis)
     user = auth.complete_login(code="a", nonce=auth.start_login().nonce).user
-    _portrait(db, redis, zhihu, archive=BoomArchive()).sync(user.id)
-    stable = db.get(Portrait, (user.id, PortraitHorizon.STABLE.value))
-    assert stable is not None
-    assert StrengthTag.PROGRAMMING.value in stable.strengths
+    _portrait(db, redis, zhihu).sync(user.id)
+    assert db.scalar(select(func.count()).select_from(ArticleCollectionRecord)) == 0

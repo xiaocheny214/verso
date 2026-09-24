@@ -7,7 +7,6 @@ import threading
 import time
 import uuid
 
-from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.portrait.extractor import build_evidence_classifier
 from verso_app.server.portrait.queue import PortraitSyncQueue
@@ -36,7 +35,6 @@ def process_portrait_sync(user_id: str) -> None:
                 grants=store,
                 zhihu=HttpxUserDataClient(settings),
                 classifier=build_evidence_classifier(settings),
-                archive=ArchiveService(),
             ).sync(uuid.UUID(user_id))
             session.commit()
         except BizException as exc:

@@ -16,13 +16,13 @@ _SKIP_TYPES = frozenset({"pin", "zvideo", "question", "collection", "favlist"})
 
 
 @dataclass(frozen=True, slots=True)
-class ArchivableUrl:
+class CollectableUrl:
     kind: Kind
     content_id: str
     source_url: str
 
 
-def parse_archivable_url(url: str) -> ArchivableUrl | None:
+def parse_collectable_url(url: str) -> CollectableUrl | None:
     raw = (url or "").strip()
     if not raw:
         return None
@@ -32,22 +32,22 @@ def parse_archivable_url(url: str) -> ArchivableUrl | None:
     if host in {"zhuanlan.zhihu.com", "www.zhuanlan.zhihu.com"}:
         match = _ARTICLE.match(path)
         if match:
-            return ArchivableUrl(kind="article", content_id=match.group(1), source_url=raw)
+            return CollectableUrl(kind="article", content_id=match.group(1), source_url=raw)
         return None
     if host in {"www.zhihu.com", "zhihu.com"}:
         match = _ANSWER_ON_QUESTION.match(path) or _ANSWER_SHORT.match(path)
         if match:
-            return ArchivableUrl(kind="answer", content_id=match.group(1), source_url=raw)
+            return CollectableUrl(kind="answer", content_id=match.group(1), source_url=raw)
         return None
     return None
 
 
-def archivable_from_content(*, url: str, content_type: str) -> ArchivableUrl | None:
+def collectable_from_content(*, url: str, content_type: str) -> CollectableUrl | None:
     """列表类型不是专栏/回答则跳过；URL 必须能解析成单篇。"""
     kind = (content_type or "").strip().lower()
     if kind in _SKIP_TYPES:
         return None
-    target = parse_archivable_url(url)
+    target = parse_collectable_url(url)
     if target is None:
         return None
     if kind and kind not in {"article", "answer", "all", ""} and kind != target.kind:
