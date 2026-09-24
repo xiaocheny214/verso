@@ -33,7 +33,7 @@ function kindLabel(url: string): string {
 
 function statusLabel(status: string): string {
   if (status === "failed") return "回传失败";
-  if (status === "pending") return "待抓";
+  if (status === "pending") return "待采集";
   return status;
 }
 
@@ -47,9 +47,17 @@ export function ArchiveWorkbench() {
   const [currentUrl, setCurrentUrl] = useState("");
   const [notice, setNotice] = useState("");
 
+  const discoverQuery = useQuery({
+    queryKey: ["articles", "discover"],
+    queryFn: articleApi.discover,
+    retry: false,
+    staleTime: Infinity,
+  });
+
   const queueQuery = useQuery({
     queryKey: articleQueueQueryKey,
     queryFn: articleApi.queue,
+    enabled: discoverQuery.isSuccess,
     retry: false,
     refetchInterval: (query) =>
       (query.state.data?.items?.length ?? 0) > 0 ? QUEUE_POLL_MS : false,
@@ -65,11 +73,11 @@ export function ArchiveWorkbench() {
   const readyCount = queueQuery.data?.ready_count ?? 0;
   const bookmarklet = token ? captureBookmarklet(token) : "";
 
-  let queueDetail = "还没有归档条目。请先在设置里同步画像。";
+  let queueDetail = "还没有采集记录。打开本页时会向知乎拉取待采集列表。";
   if (items.length > 0) {
-    queueDetail = `还有 ${items.length} 篇要在知乎窗里补抓。`;
+    queueDetail = `还有 ${items.length} 篇待采集。请在知乎窗里逐篇或批量回传正文。`;
   } else if (readyCount > 0) {
-    queueDetail = "没有待抓条目。同步画像后，新的专栏和回答会出现在这里。";
+    queueDetail = "没有待采集条目。正文已上传到对象存储。";
   }
 
   let tokenDetail = "队列为空时不需要凭证。";
@@ -99,16 +107,19 @@ export function ArchiveWorkbench() {
     () => [
       {
         id: "session",
-        ok: !queueQuery.isError || !isArticleGrantExpired(queueQuery.error),
+        ok:
+          !(discoverQuery.isError || queueQuery.isError) ||
+          !isArticleGrantExpired(discoverQuery.error ?? queueQuery.error),
         title: "Verso 登录",
-        detail: queueQuery.isError
-          ? "会话失效，请回到首页重新用知乎登录。"
-          : "当前页面已登录 Verso。",
+        detail:
+          discoverQuery.isError || queueQuery.isError
+            ? "会话失效，请回到首页重新用知乎登录。"
+            : "当前页面已登录 Verso。",
       },
       {
         id: "queue",
         ok: items.length > 0,
-        title: "待抓队列",
+        title: "待采集",
         detail: queueDetail,
       },
       {
@@ -127,6 +138,8 @@ export function ArchiveWorkbench() {
       },
     ],
     [
+      discoverQuery.error,
+      discoverQuery.isError,
       items.length,
       queueDetail,
       queueQuery.error,
@@ -138,11 +151,16 @@ export function ArchiveWorkbench() {
   );
   const failedChecks = checks.filter((check) => !check.ok);
 
-  if (queueQuery.isPending) {
-    return <p className="text-sm text-slate-500">正在读取归档队列…</p>;
+  const loadError = discoverQuery.error ?? queueQuery.error;
+  const loading =
+    discoverQuery.isPending ||
+    (discoverQuery.isSuccess && queueQuery.isPending);
+
+  if (loading) {
+    return <p className="text-sm text-slate-500">正在读取采集列表…</p>;
   }
 
-  if (queueQuery.isError && isArticleGrantExpired(queueQuery.error)) {
+  if (isArticleGrantExpired(loadError)) {
     return (
       <p className="text-sm text-rose-600">
         登录已过期，请回到首页重新用知乎登录。
@@ -150,12 +168,12 @@ export function ArchiveWorkbench() {
     );
   }
 
-  if (queueQuery.isError) {
+  if (discoverQuery.isError || queueQuery.isError) {
     return (
       <p className="text-sm text-rose-600">
-        {queueQuery.error instanceof Error
-          ? queueQuery.error.message
-          : "归档队列暂时无法读取"}
+        {loadError instanceof Error
+          ? loadError.message
+          : "采集列表暂时无法读取"}
       </p>
     );
   }
