@@ -54,7 +54,7 @@ def test_knowledge_base_crud_is_scoped_to_owner(db: Session) -> None:
     created = service.create(db, user_id=owner.id, name="Writing")
     assert created.name == "Writing"
     assert created.embedding_model == ""
-    assert created.collection == "verso_chunks"
+    assert created.collection_name == "writing"
     assert service.list(db, user_id=owner.id) == [created]
 
     updated = service.update(db, user_id=owner.id, knowledge_base_id=created.id, name="Notes")
@@ -66,6 +66,71 @@ def test_knowledge_base_crud_is_scoped_to_owner(db: Session) -> None:
 
     service.delete(db, user_id=owner.id, knowledge_base_id=created.id)
     assert service.list(db, user_id=owner.id) == []
+
+
+def test_knowledge_base_accepts_owner_collection_name(db: Session) -> None:
+    service = KnowledgeService()
+    user = _user(db)
+
+    created = service.create(db, user_id=user.id, name="Essays", collection_name="My_Notes")
+    assert created.collection_name == "my_notes"
+    assert created.embedding_model == ""
+
+    default_base = service.get_or_create_default(db, user_id=user.id)
+    assert default_base.collection_name == "default"
+
+    updated = service.update(
+        db,
+        user_id=user.id,
+        knowledge_base_id=created.id,
+        collection_name="essays_v2",
+    )
+    assert updated.collection_name == "essays_v2"
+
+
+def test_knowledge_base_rejects_duplicate_or_invalid_collection_name(db: Session) -> None:
+    service = KnowledgeService()
+    user = _user(db)
+    service.create(db, user_id=user.id, name="Writing", collection_name="notes")
+
+    with pytest.raises(BizException) as duplicate:
+        service.create(db, user_id=user.id, name="Other", collection_name="notes")
+    assert duplicate.value.code == BizCode.CONFLICT
+
+    with pytest.raises(BizException) as invalid:
+        service.create(db, user_id=user.id, name="Bad", collection_name="1notes")
+    assert invalid.value.code == BizCode.BAD_REQUEST
+
+
+def test_knowledge_routes_store_collection_name_and_ignore_embedding(db: Session) -> None:
+    owner = _user(db)
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    client = TestClient(app)
+
+    created = client.post(
+        "/me/knowledge-bases",
+        json={
+            "name": "Writing",
+            "collection_name": "essays",
+            "embedding_model": "other-embed",
+        },
+    )
+    assert created.json()["code"] == BizCode.SUCCESS
+    assert created.json()["data"]["collection_name"] == "essays"
+    assert created.json()["data"]["embedding_model"] == ""
+    knowledge_base_id = created.json()["data"]["id"]
+
+    patched = client.patch(
+        f"/me/knowledge-bases/{knowledge_base_id}",
+        json={"collection_name": "drafts", "embedding_model": "still-ignored"},
+    )
+    assert patched.json()["code"] == BizCode.SUCCESS
+    assert patched.json()["data"]["collection_name"] == "drafts"
+    assert patched.json()["data"]["embedding_model"] == ""
+
+    app.dependency_overrides.clear()
 
 
 def test_knowledge_base_delete_rejects_non_empty_base(db: Session) -> None:
@@ -166,6 +231,8 @@ def test_knowledge_routes_return_owner_scoped_data(db: Session) -> None:
     created = client.post("/me/knowledge-bases", json={"name": "Writing"})
     assert created.json()["code"] == BizCode.SUCCESS
     knowledge_base_id = created.json()["data"]["id"]
+    assert created.json()["data"]["collection_name"] == "writing"
+    assert created.json()["data"]["embedding_model"] == ""
 
     listed = client.get("/me/knowledge-bases")
     assert [item["name"] for item in listed.json()["data"]] == ["Writing"]
@@ -232,4 +299,5 @@ def test_legacy_article_rows_can_be_backfilled_to_default_base(db: Session) -> N
     assert row is not None
     assert row.knowledge_base_id is not None
     assert service.list(db, user_id=user.id)[0].name == "Default"
-    assert db.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 1
+    assert service.list(db, user_id=user.id)[0].collection_name == "default"
+    assert db.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 2

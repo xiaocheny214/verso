@@ -51,7 +51,7 @@ class KnowledgeBaseView(BaseModel):
     id: str
     name: str
     embedding_model: str
-    collection: str
+    collection_name: str
     storage_profile_id: str | None = None
 
 
