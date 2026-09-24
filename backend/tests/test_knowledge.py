@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from verso_app.bootstrap.app import create_app
-from verso_app.server.article.models import UserArticle
-from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
+from verso_app.server.collect.models import ArticleCollectionRecord
+from verso_app.server.collect.service import CollectService
 from verso_app.server.knowledge.models import KnowledgeBase
 from verso_app.server.knowledge.service import KnowledgeService
 from verso_app.web.middleware.auth import get_current_user, get_session
@@ -133,25 +133,42 @@ def test_knowledge_routes_store_collection_name_and_ignore_embedding(db: Session
     app.dependency_overrides.clear()
 
 
-def test_knowledge_base_delete_rejects_non_empty_base(db: Session) -> None:
+def test_knowledge_base_delete_ignores_collection_records(db: Session) -> None:
     service = KnowledgeService()
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
     user = _user(db)
     knowledge_base = service.create(db, user_id=user.id, name="Writing")
 
     archive.put_markdown(
         db,
         user_id=user.id,
-        knowledge_base_id=knowledge_base.id,
         source_url="https://zhuanlan.zhihu.com/p/1",
         data=b"# article",
         content_type="article",
     )
 
-    with pytest.raises(BizException) as exc:
-        service.delete(db, user_id=user.id, knowledge_base_id=knowledge_base.id)
-    assert exc.value.code == BizCode.CONFLICT
-    assert db.get(KnowledgeBase, knowledge_base.id) is not None
+    service.delete(db, user_id=user.id, knowledge_base_id=knowledge_base.id)
+    assert db.get(KnowledgeBase, knowledge_base.id) is None
+
+
+def test_collection_record_does_not_require_knowledge_base(db: Session) -> None:
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    user = _user(db)
+
+    row = archive.put_markdown(
+        db,
+        user_id=user.id,
+        source_url="https://zhuanlan.zhihu.com/p/default",
+        data=b"default",
+        content_type="article",
+        summary="a zhihu piece",
+    )
+
+    assert row.description == "a zhihu piece"
+    assert not hasattr(row, "knowledge_base_id")
+    assert [item.source_url for item in archive.list_by_user(db, user_id=user.id)] == [
+        "https://zhuanlan.zhihu.com/p/default"
+    ]
 
 
 def test_user_without_articles_has_no_default_base(db: Session) -> None:
@@ -159,65 +176,6 @@ def test_user_without_articles_has_no_default_base(db: Session) -> None:
     user = _user(db)
 
     assert service.list(db, user_id=user.id) == []
-
-
-def test_archive_rejects_another_users_knowledge_base(db: Session) -> None:
-    service = KnowledgeService()
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
-    owner = _user(db)
-    outsider = _user(db, token="token-b")
-    knowledge_base = service.create(db, user_id=owner.id, name="Writing")
-
-    with pytest.raises(BizException) as exc:
-        archive.put_markdown(
-            db,
-            user_id=outsider.id,
-            knowledge_base_id=knowledge_base.id,
-            source_url="https://zhuanlan.zhihu.com/p/other-user",
-            data=b"forbidden",
-            content_type="article",
-        )
-    assert exc.value.code == BizCode.NOT_FOUND
-
-
-def test_archive_uses_default_base_and_scopes_article_reads(db: Session) -> None:
-    service = KnowledgeService()
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
-    user = _user(db)
-    other_base = service.create(db, user_id=user.id, name="Other")
-
-    default_row = archive.put_markdown(
-        db,
-        user_id=user.id,
-        source_url="https://zhuanlan.zhihu.com/p/default",
-        data=b"default",
-        content_type="article",
-    )
-    other_row = archive.put_markdown(
-        db,
-        user_id=user.id,
-        knowledge_base_id=other_base.id,
-        source_url="https://zhuanlan.zhihu.com/p/other",
-        data=b"other",
-        content_type="article",
-    )
-
-    default_base = db.get(KnowledgeBase, default_row.knowledge_base_id)
-    assert default_base is not None
-    assert default_base.name == "Default"
-    assert default_row.knowledge_base_id != other_row.knowledge_base_id
-    assert [
-        row.source_url
-        for row in archive.list_by_knowledge_base(
-            db, user_id=user.id, knowledge_base_id=default_base.id
-        )
-    ] == ["https://zhuanlan.zhihu.com/p/default"]
-    assert [
-        row.source_url
-        for row in archive.list_by_knowledge_base(
-            db, user_id=user.id, knowledge_base_id=other_base.id
-        )
-    ] == ["https://zhuanlan.zhihu.com/p/other"]
 
 
 def test_knowledge_routes_return_owner_scoped_data(db: Session) -> None:
@@ -244,12 +202,11 @@ def test_knowledge_routes_return_owner_scoped_data(db: Session) -> None:
     app.dependency_overrides.clear()
 
 
-def test_legacy_article_rows_can_be_backfilled_to_default_base(db: Session) -> None:
-    service = KnowledgeService()
+def test_legacy_user_articles_rename_to_collection_records(db: Session) -> None:
     user = _user(db)
     engine = db.get_bind()
     db.commit()
-    Base.metadata.drop_all(engine, tables=[UserArticle.__table__])
+    Base.metadata.drop_all(engine, tables=[ArticleCollectionRecord.__table__])
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -278,11 +235,11 @@ def test_legacy_article_rows_can_be_backfilled_to_default_base(db: Session) -> N
             text(
                 """
                 INSERT INTO user_articles
-                    (id, user_id, source_url, content_type, title, object_key, status,
+                    (id, user_id, source_url, content_type, title, summary, object_key, status,
                      created_at, updated_at)
                 VALUES
-                    (:id, :user_id, :source_url, 'article', 'legacy', 'articles/legacy',
-                     'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    (:id, :user_id, :source_url, 'article', 'legacy', 'from zhihu',
+                     'articles/legacy', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """
             ),
             {
@@ -295,9 +252,9 @@ def test_legacy_article_rows_can_be_backfilled_to_default_base(db: Session) -> N
     run_pending_migrations(engine)
     run_pending_migrations(engine)
 
-    row = db.get(UserArticle, uuid.UUID("f" * 32))
+    row = db.get(ArticleCollectionRecord, uuid.UUID("f" * 32))
     assert row is not None
-    assert row.knowledge_base_id is not None
-    assert service.list(db, user_id=user.id)[0].name == "Default"
-    assert service.list(db, user_id=user.id)[0].collection_name == "default"
-    assert db.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 2
+    assert row.title == "legacy"
+    assert row.description == "from zhihu"
+    assert row.source_url == "https://zhuanlan.zhihu.com/p/legacy"
+    assert db.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 1

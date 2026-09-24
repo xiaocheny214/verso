@@ -5,10 +5,10 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from verso_app.server.article.keys import article_object_key
-from verso_app.server.article.models import UserArticle
-from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
+from verso_app.server.collect.keys import collection_object_key
+from verso_app.server.collect.models import ArticleCollectionRecord
+from verso_app.server.collect.service import CollectService
 from verso_common.enums import ArticleStatus, UserStatus
 from verso_framework.db.base import Base
 from verso_framework.storage import MemoryObjectStore, ObjectStoreError
@@ -41,7 +41,7 @@ def _user(db: Session) -> User:
 
 def test_put_get_delete_markdown(db: Session) -> None:
     store = MemoryObjectStore()
-    archive = ArchiveService(store, key_prefix="articles")
+    archive = CollectService(store, key_prefix="articles")
     user = _user(db)
     url = "https://zhuanlan.zhihu.com/p/1"
     body = "# 标题\n正文".encode()
@@ -57,7 +57,7 @@ def test_put_get_delete_markdown(db: Session) -> None:
         fetched_at=datetime(2026, 9, 20, tzinfo=UTC),
     )
     assert row.status == ArticleStatus.READY
-    assert row.object_key == article_object_key(user.id, url)
+    assert row.object_key == collection_object_key(user.id, url)
     assert archive.get_markdown(db, user_id=user.id, source_url=url) == body
     listed = archive.list_by_user(db, user_id=user.id)
     assert len(listed) == 1
@@ -69,7 +69,7 @@ def test_put_get_delete_markdown(db: Session) -> None:
 
 def test_same_url_upserts_and_skips_unchanged_body(db: Session) -> None:
     store = MemoryObjectStore()
-    archive = ArchiveService(store, key_prefix="articles")
+    archive = CollectService(store, key_prefix="articles")
     user = _user(db)
     url = "https://www.zhihu.com/answer/1"
     first = archive.put_markdown(
@@ -89,7 +89,10 @@ def test_same_url_upserts_and_skips_unchanged_body(db: Session) -> None:
         title="一改",
     )
     assert first.id == second.id
-    assert db.scalar(select(UserArticle).where(UserArticle.user_id == user.id)) is second
+    assert (
+        db.scalar(select(ArticleCollectionRecord).where(ArticleCollectionRecord.user_id == user.id))
+        is second
+    )
     assert archive.get_markdown(db, user_id=user.id, source_url=url) == b"one"
 
     third = archive.put_markdown(
@@ -111,7 +114,7 @@ def test_put_failure_marks_row_failed(db: Session) -> None:
         ) -> StoredObject:
             raise ObjectStoreError("boom")
 
-    archive = ArchiveService(BoomStore(), key_prefix="articles")
+    archive = CollectService(BoomStore(), key_prefix="articles")
     user = _user(db)
     url = "https://zhuanlan.zhihu.com/p/2"
     with pytest.raises(ObjectStoreError):
@@ -134,7 +137,7 @@ def test_enqueue_listed_contents_skips_pins(db: Session) -> None:
 
     article_url = "https://zhuanlan.zhihu.com/p/10"
     pin_url = "https://www.zhihu.com/pin/1"
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
     user = _user(db)
     archive.enqueue_listed_contents(
         db,
@@ -155,7 +158,7 @@ def test_browser_capture_saves_html_from_logged_in_page(db: Session) -> None:
 
     store = MemoryObjectStore()
     url = "https://zhuanlan.zhihu.com/p/14"
-    archive = ArchiveService(store, key_prefix="articles")
+    archive = CollectService(store, key_prefix="articles")
     user = _user(db)
     archive.enqueue_listed_contents(
         db,
@@ -178,7 +181,7 @@ def test_browser_capture_saves_html_from_logged_in_page(db: Session) -> None:
 def test_browser_capture_rejects_unknown_url(db: Session) -> None:
     from verso_common.exceptions import BizException
 
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
     user = _user(db)
     with pytest.raises(BizException):
         archive.capture_from_browser(
@@ -192,7 +195,7 @@ def test_browser_capture_rejects_unknown_url(db: Session) -> None:
 def test_list_queue_puts_failed_ahead_of_pending(db: Session) -> None:
     from verso_framework.providers.zhihu import ZhihuContent
 
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
     user = _user(db)
     archive.enqueue_listed_contents(
         db,
@@ -223,7 +226,7 @@ def test_enqueue_listed_contents_does_not_fetch(db: Session) -> None:
     from verso_framework.providers.zhihu import ZhihuContent
 
     url = "https://www.zhihu.com/answer/1902358841586320975"
-    archive = ArchiveService(MemoryObjectStore(), key_prefix="articles")
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
     user = _user(db)
     archive.enqueue_listed_contents(
         db,
