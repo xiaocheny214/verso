@@ -1,0 +1,15 @@
+.git
+.env
+data
+deploy
+docs
+frontend
+openapi
+backend/.venv
+backend/.pytest_cache
+backend/.ruff_cache
+backend/.coverage
+backend/tests
+**/__pycache__
+**/*.pyc
+**/*.egg-info
