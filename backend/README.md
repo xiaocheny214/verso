@@ -5,7 +5,7 @@ uv workspace：`common → framework → app`。分层说明见 [`docs/architect
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres redis
+docker compose up -d postgres redis litellm
 cd backend
 uv sync --all-packages
 uv run uvicorn verso_app.bootstrap.app:app --reload

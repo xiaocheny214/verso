@@ -47,6 +47,45 @@ services:
     networks:
       - verso-net
 
+  # OpenAI 兼容网关。应用只连这里的别名；上游地址和密钥在 LITELLM_*。
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: verso-litellm
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-verso-dev}
+      # 未填写时用占位，保证代理能起来。真正调用要换成带前缀的模型名和上游密钥。
+      LITELLM_CHAT_MODEL: ${LITELLM_CHAT_MODEL:-openai/unset}
+      LITELLM_CHAT_API_BASE: ${LITELLM_CHAT_API_BASE:-http://127.0.0.1:9/v1}
+      LITELLM_CHAT_API_KEY: ${LITELLM_CHAT_API_KEY:-unset}
+      LITELLM_EMBED_MODEL: ${LITELLM_EMBED_MODEL:-openai/unset}
+      LITELLM_EMBED_API_BASE: ${LITELLM_EMBED_API_BASE:-http://127.0.0.1:9/v1}
+      LITELLM_EMBED_API_KEY: ${LITELLM_EMBED_API_KEY:-unset}
+      LITELLM_RERANK_MODEL: ${LITELLM_RERANK_MODEL:-cohere/unset}
+      LITELLM_RERANK_API_BASE: ${LITELLM_RERANK_API_BASE:-http://127.0.0.1:9}
+      LITELLM_RERANK_API_KEY: ${LITELLM_RERANK_API_KEY:-unset}
+    volumes:
+      - ./deploy/litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - verso-net
+
   # 本地 standalone：内嵌 etcd + 本地盘，不另起 etcd / MinIO。
   milvus:
     image: milvusdb/milvus:v2.5.16
@@ -88,6 +127,11 @@ services:
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       MILVUS_URI: http://milvus:19530
+      # .env 里的 localhost:4000 只给宿主机 uv。容器内走服务名，密钥用代理 master key。
+      VERSO_LLM_BASE_URL: http://litellm:4000
+      VERSO_LLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-verso-dev}
+      VERSO_LLM_MODEL: chat
+      VERSO_LLM_EMBEDDING_MODEL: embed
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -96,6 +140,8 @@ services:
       redis:
         condition: service_healthy
       milvus:
+        condition: service_healthy
+      litellm:
         condition: service_healthy
     networks:
       - verso-net
