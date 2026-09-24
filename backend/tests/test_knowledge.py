@@ -12,13 +12,13 @@ from verso_app.bootstrap.app import create_app
 from verso_app.server.article.models import UserArticle
 from verso_app.server.article.service import ArchiveService
 from verso_app.server.auth.models import User
-from verso_app.server.knowledge.migration import ensure_knowledge_schema
 from verso_app.server.knowledge.models import KnowledgeBase
 from verso_app.server.knowledge.service import KnowledgeService
 from verso_app.web.middleware.auth import get_current_user, get_session
 from verso_common.enums import BizCode, UserStatus
 from verso_common.exceptions import BizException
 from verso_framework.db.base import Base
+from verso_framework.db.migrations import run_pending_migrations
 from verso_framework.storage import MemoryObjectStore
 
 
@@ -225,9 +225,11 @@ def test_legacy_article_rows_can_be_backfilled_to_default_base(db: Session) -> N
             },
         )
 
-    ensure_knowledge_schema(engine)
+    run_pending_migrations(engine)
+    run_pending_migrations(engine)
 
     row = db.get(UserArticle, uuid.UUID("f" * 32))
     assert row is not None
     assert row.knowledge_base_id is not None
     assert service.list(db, user_id=user.id)[0].name == "Default"
+    assert db.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one() == 1

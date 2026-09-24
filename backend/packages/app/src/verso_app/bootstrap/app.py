@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
 
 from verso_app.web.api import (
     article_router,
@@ -19,7 +20,7 @@ from verso_app.web.handler import register_exception_handlers
 from verso_app.worker.handlers import schedule_portrait_sync_poller
 from verso_common.result import Response
 from verso_framework.config import get_app_settings
-from verso_framework.db import get_engine
+from verso_framework.db import Base, get_engine, run_pending_migrations
 from verso_framework.providers.zhihu.oauth import schedule_openapi_warmup
 
 
@@ -31,7 +32,6 @@ async def lifespan(_app: FastAPI):
         from verso_app.server.auth import models as auth_models  # noqa: F401
         from verso_app.server.exchange import models as exchange_models  # noqa: F401
         from verso_app.server.knowledge import models as knowledge_models  # noqa: F401
-        from verso_app.server.knowledge.migration import ensure_knowledge_schema
         from verso_app.server.match import models as match_models  # noqa: F401
         from verso_app.server.portrait import models as portrait_models  # noqa: F401
         from verso_app.server.quality import models as quality_models  # noqa: F401
@@ -39,7 +39,10 @@ async def lifespan(_app: FastAPI):
             models as reputation_models,  # noqa: F401
         )
 
-        ensure_knowledge_schema(get_engine())
+        engine = get_engine()
+        is_new_database = not inspect(engine).has_table("user_articles")
+        Base.metadata.create_all(bind=engine)
+        run_pending_migrations(engine, baseline=is_new_database)
     schedule_openapi_warmup()
     schedule_portrait_sync_poller()
     yield
