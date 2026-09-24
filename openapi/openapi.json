@@ -232,6 +232,18 @@
       },
       "KnowledgeBaseCreateBody": {
         "properties": {
+          "collection_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Name"
+          },
           "name": {
             "minLength": 1,
             "title": "Name",
@@ -258,6 +270,18 @@
       },
       "KnowledgeBasePatchBody": {
         "properties": {
+          "collection_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Name"
+          },
           "name": {
             "anyOf": [
               {
@@ -288,8 +312,8 @@
       },
       "KnowledgeBaseView": {
         "properties": {
-          "collection": {
-            "title": "Collection",
+          "collection_name": {
+            "title": "Collection Name",
             "type": "string"
           },
           "embedding_model": {
@@ -320,7 +344,7 @@
           "id",
           "name",
           "embedding_model",
-          "collection"
+          "collection_name"
         ],
         "title": "KnowledgeBaseView",
         "type": "object"

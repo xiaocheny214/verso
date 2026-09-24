@@ -38,11 +38,13 @@ UserDep = Annotated[User, Depends(get_current_user)]
 
 class KnowledgeBaseCreateBody(BaseModel):
     name: str = Field(min_length=1)
+    collection_name: str | None = Field(default=None, max_length=128)
     storage_profile_id: uuid.UUID | None = None
 
 
 class KnowledgeBasePatchBody(BaseModel):
     name: str | None = Field(default=None, min_length=1)
+    collection_name: str | None = Field(default=None, max_length=128)
     storage_profile_id: uuid.UUID | None = None
 
 
@@ -51,7 +53,7 @@ def _base_view(row: KnowledgeBase) -> KnowledgeBaseView:
         id=str(row.id),
         name=row.name,
         embedding_model=row.embedding_model,
-        collection=row.collection,
+        collection_name=row.collection_name,
         storage_profile_id=str(row.storage_profile_id) if row.storage_profile_id else None,
     )
 
@@ -78,6 +80,7 @@ def create_knowledge_base(
         session,
         user_id=user.id,
         name=body.name,
+        collection_name=body.collection_name,
         storage_profile_id=body.storage_profile_id,
     )
     return ApiResponse.success(_base_view(row))
@@ -108,6 +111,7 @@ def patch_knowledge_base(
         user_id=user.id,
         knowledge_base_id=knowledge_base_id,
         name=body.name,
+        collection_name=body.collection_name,
         storage_profile_id=body.storage_profile_id,
         update_storage_profile="storage_profile_id" in body.model_fields_set,
     )

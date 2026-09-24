@@ -537,6 +537,8 @@ export interface components {
         };
         /** KnowledgeBaseCreateBody */
         KnowledgeBaseCreateBody: {
+            /** Collection Name */
+            collection_name?: string | null;
             /** Name */
             name: string;
             /** Storage Profile Id */
@@ -544,6 +546,8 @@ export interface components {
         };
         /** KnowledgeBasePatchBody */
         KnowledgeBasePatchBody: {
+            /** Collection Name */
+            collection_name?: string | null;
             /** Name */
             name?: string | null;
             /** Storage Profile Id */
@@ -551,8 +555,8 @@ export interface components {
         };
         /** KnowledgeBaseView */
         KnowledgeBaseView: {
-            /** Collection */
-            collection: string;
+            /** Collection Name */
+            collection_name: string;
             /** Embedding Model */
             embedding_model: string;
             /** Id */
