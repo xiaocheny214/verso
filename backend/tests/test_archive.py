@@ -62,7 +62,7 @@ def test_put_get_delete_markdown(db: Session) -> None:
     listed = archive.list_by_user(db, user_id=user.id)
     assert len(listed) == 1
     assert listed[0].title == "标题"
-    assert archive.delete(db, user_id=user.id, source_url=url) is True
+    archive.delete(db, user_id=user.id, source_url=url)
     assert archive.get_by_source(db, user_id=user.id, source_url=url) is None
     assert store.exists(row.object_key) is False
 
@@ -237,3 +237,73 @@ def test_enqueue_listed_contents_does_not_fetch(db: Session) -> None:
     assert row is not None
     assert row.status == ArticleStatus.PENDING
     assert row.error_class is None
+
+
+def test_delete_refuses_when_knowledge_document_references_object(db: Session) -> None:
+    from verso_app.server.knowledge.service import KnowledgeService
+    from verso_common.enums import BizCode
+    from verso_common.exceptions import BizException
+
+    store = MemoryObjectStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(store)
+    user = _user(db)
+    url = "https://zhuanlan.zhihu.com/p/ref-1"
+    archive.put_markdown(
+        db,
+        user_id=user.id,
+        source_url=url,
+        data=b"# body",
+        content_type="article",
+        title="Ref",
+    )
+    base = knowledge.create(db, user_id=user.id, name="Writing")
+    knowledge.attach_from_collect(
+        db,
+        user_id=user.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+
+    with pytest.raises(BizException) as conflict:
+        archive.delete(db, user_id=user.id, source_url=url)
+    assert conflict.value.code == BizCode.CONFLICT
+    assert archive.get_by_source(db, user_id=user.id, source_url=url) is not None
+    assert store.exists(collection_object_key(user.id, url)) is True
+
+
+def test_delete_collection_record_route(db: Session) -> None:
+    from fastapi.testclient import TestClient
+
+    from verso_app.bootstrap.app import create_app
+    from verso_app.web.middleware.auth import get_collect_service, get_current_user, get_session
+    from verso_common.enums import BizCode
+
+    store = MemoryObjectStore()
+    archive = CollectService(store, key_prefix="articles")
+    user = _user(db)
+    url = "https://zhuanlan.zhihu.com/p/route-del"
+    row = archive.put_markdown(
+        db,
+        user_id=user.id,
+        source_url=url,
+        data=b"bye",
+        content_type="article",
+        title="Bye",
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_collect_service] = lambda: archive
+    client = TestClient(app)
+
+    deleted = client.delete(f"/me/articles/{row.id}")
+    assert deleted.json()["code"] == BizCode.SUCCESS
+    assert archive.get_by_source(db, user_id=user.id, source_url=url) is None
+    assert store.exists(row.object_key) is False
+
+    missing = client.delete(f"/me/articles/{row.id}")
+    assert missing.json()["code"] == BizCode.NOT_FOUND
+    app.dependency_overrides.clear()

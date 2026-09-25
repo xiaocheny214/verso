@@ -2542,6 +2542,50 @@
         ]
       }
     },
+    "/me/articles/{record_id}": {
+      "delete": {
+        "description": "删除采集记录与对象存储正文；若仍被知识库文档引用则拒绝。",
+        "operationId": "delete_collection_record_me_articles__record_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Collection Record",
+        "tags": [
+          "collect"
+        ]
+      }
+    },
     "/me/knowledge-bases": {
       "get": {
         "operationId": "list_knowledge_bases_me_knowledge_bases_get",
