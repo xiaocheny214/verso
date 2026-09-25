@@ -13,6 +13,7 @@ from verso_app.server.collect.html import html_to_markdown
 from verso_app.server.collect.keys import collection_object_key, content_sha256
 from verso_app.server.collect.models import ArticleCollectionRecord
 from verso_app.server.collect.urls import collectable_from_content, parse_collectable_url
+from verso_app.server.knowledge.models import KnowledgeDocument
 from verso_common.enums import ArticleStatus, BizCode
 from verso_common.exceptions import BizException
 from verso_framework.config.storage import get_storage_settings
@@ -182,6 +183,19 @@ class CollectService:
             raise KeyError(source_url)
         return self._store.get(row.object_key)
 
+    def get_by_id(
+        self, db: Session, *, user_id: uuid.UUID, record_id: uuid.UUID
+    ) -> ArticleCollectionRecord:
+        row = db.scalar(
+            select(ArticleCollectionRecord).where(
+                ArticleCollectionRecord.id == record_id,
+                ArticleCollectionRecord.user_id == user_id,
+            )
+        )
+        if row is None:
+            raise BizException("采集记录不存在", code=BizCode.NOT_FOUND)
+        return row
+
     def get_by_source(
         self, db: Session, *, user_id: uuid.UUID, source_url: str
     ) -> ArticleCollectionRecord | None:
@@ -302,11 +316,28 @@ class CollectService:
             summary=row.description,
         )
 
-    def delete(self, db: Session, *, user_id: uuid.UUID, source_url: str) -> bool:
+    def delete(self, db: Session, *, user_id: uuid.UUID, source_url: str) -> None:
         row = self.get_by_source(db, user_id=user_id, source_url=source_url)
         if row is None:
-            return False
+            raise BizException("采集记录不存在", code=BizCode.NOT_FOUND)
+        self._delete_row(db, row)
+
+    def delete_by_id(self, db: Session, *, user_id: uuid.UUID, record_id: uuid.UUID) -> None:
+        row = self.get_by_id(db, user_id=user_id, record_id=record_id)
+        self._delete_row(db, row)
+
+    def _delete_row(self, db: Session, row: ArticleCollectionRecord) -> None:
+        # 正文与知识库文档共享 object_key：仍被挂接时拒绝删，避免悬空文档。
+        referenced = db.scalar(
+            select(KnowledgeDocument.id)
+            .where(KnowledgeDocument.object_key == row.object_key)
+            .limit(1)
+        )
+        if referenced is not None:
+            raise BizException(
+                "对象仍被知识库文档引用，请先从知识库移除该文档",
+                code=BizCode.CONFLICT,
+            )
         self._store.delete(row.object_key)
         db.delete(row)
         db.flush()
-        return True

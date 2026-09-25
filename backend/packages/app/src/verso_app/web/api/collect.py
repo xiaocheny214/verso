@@ -137,3 +137,15 @@ def capture_from_browser(
         title=body.title,
     )
     return ApiResponse.success(_view(row))
+
+
+@router.delete("/me/articles/{record_id}")
+def delete_collection_record(
+    record_id: uuid.UUID,
+    session: SessionDep,
+    archive: CollectDep,
+    user: UserDep,
+) -> ApiResponse[None]:
+    """删除采集记录与对象存储正文；若仍被知识库文档引用则拒绝。"""
+    archive.delete_by_id(session, user_id=user.id, record_id=record_id)
+    return ApiResponse.success()
