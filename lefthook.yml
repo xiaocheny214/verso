@@ -10,7 +10,7 @@ pre-commit:
     frontend-format:
       root: frontend/
       glob: "*.{js,jsx,ts,tsx,mjs,cjs,json,css}"
-      run: pnpm exec oxfmt --check {staged_files}
+      run: node scripts/oxfmt-staged.mjs {staged_files}
     backend-lint:
       root: backend/
       glob: "*.py"
