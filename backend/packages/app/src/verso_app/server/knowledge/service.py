@@ -1,9 +1,11 @@
-"""知识库 CRUD 与库内文档元数据。采集记录不属于知识库。"""
+"""知识库 CRUD、库内文档元数据与 process 编排。采集记录不属于知识库。"""
 
 from __future__ import annotations
 
 import re
+import time
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,14 +17,31 @@ from verso_app.server.chunk import (
     parse_chunk_strategy_params,
 )
 from verso_app.server.collect.service import CollectService
-from verso_app.server.knowledge.models import KnowledgeBase, KnowledgeDocument
-from verso_common.enums import ArticleStatus, BizCode, ChunkStrategy, DocumentStatus
+from verso_app.server.knowledge.models import (
+    DocumentProcessRun,
+    KnowledgeBase,
+    KnowledgeDocument,
+)
+from verso_app.server.knowledge.vector_store import (
+    ChunkVectorPoint,
+    ChunkVectorStore,
+    MilvusChunkVectorStore,
+)
+from verso_common.enums import (
+    ArticleStatus,
+    BizCode,
+    ChunkStrategy,
+    DocumentStatus,
+    ProcessRunStatus,
+)
 from verso_common.exceptions import BizException
 from verso_framework.config import get_app_settings
+from verso_framework.embed import Embedder, build_embedder
 from verso_framework.storage import ObjectStore, ObjectStoreError, get_object_store
 
 _COLLECTION_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
 _PROCESS_MODES = frozenset({"chunk", "none"})
+_ERROR_MESSAGE_MAX = 2000
 
 
 class KnowledgeService:
@@ -31,6 +50,8 @@ class KnowledgeService:
     def __init__(self) -> None:
         self._store: ObjectStore | None = None
         self._chunker = ChunkService()
+        self._embedder: Embedder | None = None
+        self._vectors: ChunkVectorStore | None = None
 
     @classmethod
     def with_deps(
@@ -38,17 +59,34 @@ class KnowledgeService:
         store: ObjectStore | None = None,
         *,
         chunker: ChunkService | None = None,
+        embedder: Embedder | None = None,
+        vectors: ChunkVectorStore | None = None,
     ) -> KnowledgeService:
         service = cls()
         service._store = store
         if chunker is not None:
             service._chunker = chunker
+        service._embedder = embedder
+        service._vectors = vectors
         return service
 
     def _object_store(self) -> ObjectStore:
         if self._store is None:
             self._store = get_object_store()
         return self._store
+
+    def _get_embedder(self) -> Embedder:
+        if self._embedder is None:
+            try:
+                self._embedder = build_embedder(get_app_settings())
+            except ValueError as exc:
+                raise BizException(str(exc), code=BizCode.BAD_REQUEST) from exc
+        return self._embedder
+
+    def _vector_store(self) -> ChunkVectorStore:
+        if self._vectors is None:
+            self._vectors = MilvusChunkVectorStore()
+        return self._vectors
 
     def create(
         self,
@@ -214,6 +252,8 @@ class KnowledgeService:
                 and existing.content_hash == record.content_hash
             ):
                 return existing
+            # 正文变更：回 pending，并清掉旧向量，避免 retrieve 命中过期块。
+            self._vector_store().delete_document(user_id=user_id, document_id=existing.id)
             existing.title = record.title
             existing.object_key = record.object_key
             existing.content_type = "markdown"
@@ -332,6 +372,163 @@ class KnowledgeService:
         text = self._load_document_text(row)
         return row, self._chunker.split(text, params)
 
+    def process_document(
+        self,
+        db: Session,
+        *,
+        user_id: uuid.UUID,
+        knowledge_base_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> tuple[KnowledgeDocument, DocumentProcessRun]:
+        row = self.get_document(
+            db,
+            user_id=user_id,
+            knowledge_base_id=knowledge_base_id,
+            document_id=document_id,
+        )
+        self._normalize_legacy_strategy(db, row)
+
+        started = datetime.now(UTC)
+        started_mono = time.perf_counter()
+        run = DocumentProcessRun(
+            user_id=user_id,
+            knowledge_base_id=knowledge_base_id,
+            document_id=row.id,
+            status=ProcessRunStatus.RUNNING,
+            process_mode=row.process_mode,
+            chunk_strategy=row.chunk_strategy,
+            chunk_size=row.chunk_size,
+            overlap=row.overlap,
+            started_at=started,
+        )
+        db.add(run)
+        db.flush()
+
+        try:
+            chunk_count = self._run_process_pipeline(db, user_id=user_id, row=row)
+        except BizException as exc:
+            self._fail_process(db, row=row, run=run, started_mono=started_mono, exc=exc)
+            raise
+        except Exception as exc:
+            self._fail_process(db, row=row, run=run, started_mono=started_mono, exc=exc)
+            raise BizException("文档处理失败", code=BizCode.INTERNAL_ERROR) from exc
+
+        finished = datetime.now(UTC)
+        run.status = ProcessRunStatus.SUCCESS
+        run.chunk_count = chunk_count
+        run.error_class = None
+        run.error_message = None
+        run.total_duration_ms = int((time.perf_counter() - started_mono) * 1000)
+        run.finished_at = finished
+        row.status = DocumentStatus.SUCCESS
+        row.chunk_count = chunk_count
+        row.error_class = None
+        db.flush()
+        return row, run
+
+    def list_process_runs(
+        self,
+        db: Session,
+        *,
+        user_id: uuid.UUID,
+        knowledge_base_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> list[DocumentProcessRun]:
+        self.get_document(
+            db,
+            user_id=user_id,
+            knowledge_base_id=knowledge_base_id,
+            document_id=document_id,
+        )
+        return list(
+            db.scalars(
+                select(DocumentProcessRun)
+                .where(DocumentProcessRun.document_id == document_id)
+                .order_by(
+                    DocumentProcessRun.started_at.desc().nullslast(),
+                    DocumentProcessRun.created_at.desc(),
+                    DocumentProcessRun.id.desc(),
+                )
+            ).all()
+        )
+
+    def _run_process_pipeline(
+        self,
+        db: Session,
+        *,
+        user_id: uuid.UUID,
+        row: KnowledgeDocument,
+    ) -> int:
+        vectors = self._vector_store()
+
+        if row.process_mode == "none":
+            vectors.delete_document(user_id=user_id, document_id=row.id)
+            return 0
+
+        params = parse_chunk_strategy_params(
+            strategy=row.chunk_strategy,
+            chunk_size=row.chunk_size,
+            overlap=row.overlap,
+        )
+        text = self._load_document_text(row)
+        split = self._chunker.split(text, params)
+        if not split.chunks:
+            vectors.delete_document(user_id=user_id, document_id=row.id)
+            return 0
+
+        embedder = self._get_embedder()
+        embeddings = embedder.embed_documents([chunk.text for chunk in split.chunks])
+        if len(embeddings) != len(split.chunks):
+            raise BizException("embedding 数量与切块不一致", code=BizCode.INTERNAL_ERROR)
+
+        dimension = embedder.dimensions if embedder.dimensions is not None else len(embeddings[0])
+        if dimension < 1:
+            raise BizException("embedding 维度无效", code=BizCode.INTERNAL_ERROR)
+
+        snapshot = {
+            "title": row.title,
+            "source_type": row.source_type,
+            "source_url": row.source_url or "",
+        }
+        points = [
+            ChunkVectorPoint(
+                user_id=user_id,
+                knowledge_base_id=row.knowledge_base_id,
+                document_id=row.id,
+                chunk_index=chunk.index,
+                char_start=chunk.char_start,
+                char_end=chunk.char_end,
+                embedding=embeddings[index],
+                metadata=snapshot,
+            )
+            for index, chunk in enumerate(split.chunks)
+        ]
+        vectors.ensure_collection(dimension=dimension)
+        vectors.delete_document(user_id=user_id, document_id=row.id)
+        vectors.upsert(points)
+        return len(points)
+
+    def _fail_process(
+        self,
+        db: Session,
+        *,
+        row: KnowledgeDocument,
+        run: DocumentProcessRun,
+        started_mono: float,
+        exc: BaseException,
+    ) -> None:
+        message = str(exc).strip() or type(exc).__name__
+        if len(message) > _ERROR_MESSAGE_MAX:
+            message = message[:_ERROR_MESSAGE_MAX]
+        run.status = ProcessRunStatus.FAILED
+        run.error_class = type(exc).__name__
+        run.error_message = message
+        run.total_duration_ms = int((time.perf_counter() - started_mono) * 1000)
+        run.finished_at = datetime.now(UTC)
+        row.status = DocumentStatus.FAILED
+        row.error_class = run.error_class
+        db.flush()
+
     def _normalize_legacy_strategy(self, db: Session, row: KnowledgeDocument) -> None:
         if row.chunk_strategy == "paragraph_window":
             row.chunk_strategy = ChunkStrategy.FIXED_SIZE
@@ -358,7 +555,16 @@ class KnowledgeService:
             knowledge_base_id=knowledge_base_id,
             document_id=document_id,
         )
-        # 与 collect 可能共享 object_key：本切片只删元数据，不删对象字节。
+        # 先清 Milvus，再删 PG（process_runs 随 document FK CASCADE）。
+        # 不删对象存储：object_key 常与 collect 共享；正文生命周期归 collect。
+        # 无 knowledge_chunks 表：块定位只在 Milvus（chunk_index + char_*）。
+        try:
+            self._vector_store().delete_document(user_id=user_id, document_id=row.id)
+        except Exception as exc:
+            raise BizException(
+                "文档向量清理失败，未删除文档元数据",
+                code=BizCode.INTERNAL_ERROR,
+            ) from exc
         db.delete(row)
         db.flush()
 

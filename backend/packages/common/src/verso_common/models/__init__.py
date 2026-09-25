@@ -76,6 +76,27 @@ class KnowledgeDocumentView(BaseModel):
     source_url: str | None = None
 
 
+class DocumentProcessRunView(BaseModel):
+    id: str
+    document_id: str
+    status: str
+    process_mode: str | None = None
+    chunk_strategy: str | None = None
+    chunk_size: int | None = None
+    overlap: int | None = None
+    chunk_count: int | None = None
+    error_class: str | None = None
+    error_message: str | None = None
+    total_duration_ms: int | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class DocumentProcessResultView(BaseModel):
+    document: KnowledgeDocumentView
+    run: DocumentProcessRunView
+
+
 class TextChunkView(BaseModel):
     index: int
     text: str

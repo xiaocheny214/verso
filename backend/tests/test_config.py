@@ -38,3 +38,4 @@ def test_milvus_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.db == "default"
     assert settings.collection == "verso_chunks"
     assert settings.timeout_sec == 10
+    assert settings.num_partitions == 64

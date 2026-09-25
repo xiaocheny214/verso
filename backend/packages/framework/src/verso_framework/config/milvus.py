@@ -24,6 +24,8 @@ class MilvusSettings(BaseSettings):
     db: str = "default"
     collection: str = "verso_chunks"
     timeout_sec: float = 10
+    # partition key（user_id）哈希桶数；不是「一租户一分区」。
+    num_partitions: int = 64
 
 
 @lru_cache

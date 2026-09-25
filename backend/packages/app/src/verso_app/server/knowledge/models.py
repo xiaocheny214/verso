@@ -1,6 +1,6 @@
-"""knowledge_bases / knowledge_documents：库容器与库内文档元数据。
+"""knowledge_bases / knowledge_documents / document_process_runs。
 
-正文在对象存储；本模块不落文章/分块明文。
+正文在对象存储；本模块不落文章/分块明文。向量与定位在 Milvus。
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -23,7 +24,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from verso_common.enums import ChunkStrategy, DocumentStatus
+from verso_common.enums import ChunkStrategy, DocumentStatus, ProcessRunStatus
 from verso_framework.db.base import Base
 
 
@@ -94,6 +95,53 @@ class KnowledgeDocument(Base):
     error_class: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class DocumentProcessRun(Base):
+    """一次文档 process 运行记录；不含块正文。"""
+
+    __tablename__ = "document_process_runs"
+    __table_args__ = (
+        Index("idx_document_process_runs_document_id", "document_id"),
+        Index("idx_document_process_runs_kb_id", "knowledge_base_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    knowledge_base_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("knowledge_bases.id"),
+        nullable=False,
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("knowledge_documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=ProcessRunStatus.PENDING
+    )
+    process_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    chunk_strategy: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    chunk_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    overlap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_class: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_duration_ms: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

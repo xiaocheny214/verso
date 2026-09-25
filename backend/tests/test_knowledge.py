@@ -14,11 +14,13 @@ from verso_app.server.collect.models import ArticleCollectionRecord
 from verso_app.server.collect.service import CollectService
 from verso_app.server.knowledge.models import KnowledgeBase
 from verso_app.server.knowledge.service import KnowledgeService
+from verso_app.server.knowledge.vector_store import MemoryChunkVectorStore
 from verso_app.web.middleware.auth import get_current_user, get_session
 from verso_common.enums import BizCode, UserStatus
 from verso_common.exceptions import BizException
 from verso_framework.db.base import Base
 from verso_framework.db.migrations import run_pending_migrations
+from verso_framework.embed import HashingEmbedder
 from verso_framework.storage import MemoryObjectStore
 
 
@@ -152,8 +154,10 @@ def test_knowledge_base_delete_ignores_collection_records(db: Session) -> None:
 
 
 def test_knowledge_document_crud_from_collect(db: Session) -> None:
-    service = KnowledgeService()
-    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    service = KnowledgeService.with_deps(store, vectors=vectors)
+    archive = CollectService(store, key_prefix="articles")
     owner = _user(db)
     outsider = _user(db, token="token-b")
     base_a = service.create(db, user_id=owner.id, name="Writing")
@@ -241,13 +245,18 @@ def test_knowledge_document_crud_from_collect(db: Session) -> None:
         document_id=attached.id,
     )
     assert service.list_documents(db, user_id=owner.id, knowledge_base_id=base_a.id) == []
+    # collect æ­£æä»å¨å¯¹è±¡å­å¨ï¼å±äº?object_keyï¼å ææ¡£ä¸å  Kodoï¼?
+    assert store.get(attached.object_key) == b"# body"
     service.delete(db, user_id=owner.id, knowledge_base_id=base_a.id)
     assert db.get(KnowledgeBase, base_a.id) is None
 
 
 def test_knowledge_document_routes(db: Session) -> None:
     owner = _user(db)
-    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(store, vectors=vectors)
     url = "https://zhuanlan.zhihu.com/p/route-1"
     archive.put_markdown(
         db,
@@ -264,6 +273,7 @@ def test_knowledge_document_routes(db: Session) -> None:
     from verso_app.web.middleware.auth import get_collect_service
 
     app.dependency_overrides[get_collect_service] = lambda: archive
+    app.dependency_overrides[KnowledgeService] = lambda: knowledge
     client = TestClient(app)
 
     created = client.post("/me/knowledge-bases", json={"name": "Writing"})
@@ -403,6 +413,463 @@ def test_knowledge_document_chunk_preview(db: Session) -> None:
     assert live.json()["data"]["document_id"] == str(doc.id)
     assert live.json()["data"]["chunks"]
     assert "text" in live.json()["data"]["chunks"][0]
+    app.dependency_overrides.clear()
+
+
+def test_knowledge_document_process_writes_vectors_without_text(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    outsider = _user(db, token="token-b")
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-1"
+    body = b"abcdefghij"  # 10 chars â?2 chunks at size 5 overlap 0
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=body,
+        content_type="article",
+        title="Process Me",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_strategy="fixed_size",
+        chunk_size=5,
+        overlap=0,
+    )
+
+    document, run = knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert document.status == "success"
+    assert document.chunk_count == 2
+    assert run.status == "success"
+    assert run.chunk_count == 2
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == [
+        f"{doc.id}:0",
+        f"{doc.id}:1",
+    ]
+    point = vectors._points[f"{doc.id}:0"]
+    assert point.char_start == 0
+    assert point.char_end == 5
+    assert len(point.embedding) == 4
+    assert not hasattr(point, "text") or "text" not in point.metadata
+    assert point.metadata.get("title") == "Process Me"
+    assert "text" not in point.metadata
+
+    # re-process replaces vectors
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=10,
+        overlap=0,
+    )
+    document2, run2 = knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert document2.chunk_count == 1
+    assert run2.chunk_count == 1
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == [f"{doc.id}:0"]
+
+    runs = knowledge.list_process_runs(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert {item.id for item in runs} == {run.id, run2.id}
+    assert any(item.chunk_count == 1 for item in runs)
+    assert any(item.chunk_count == 2 for item in runs)
+
+    with pytest.raises(BizException) as hidden:
+        knowledge.process_document(
+            db,
+            user_id=outsider.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        )
+    assert hidden.value.code == BizCode.NOT_FOUND
+
+
+def test_knowledge_document_process_mode_none_clears_vectors(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-none"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"hello world",
+        content_type="article",
+        title="None Mode",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=5,
+        overlap=0,
+    )
+    knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id)
+
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        process_mode="none",
+    )
+    document, run = knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert document.status == "success"
+    assert document.chunk_count == 0
+    assert run.status == "success"
+    assert run.chunk_count == 0
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
+
+
+def test_knowledge_document_delete_clears_vectors_keeps_object(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-delete"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"delete me please",
+        content_type="article",
+        title="Delete",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=8,
+        overlap=0,
+    )
+    knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id)
+    object_key = doc.object_key
+
+    knowledge.delete_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
+    assert store.get(object_key) == b"delete me please"
+    assert knowledge.list_documents(db, user_id=owner.id, knowledge_base_id=base.id) == []
+
+
+def test_knowledge_reattach_changed_body_clears_vectors(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-reattach"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"first body text",
+        content_type="article",
+        title="V1",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=8,
+        overlap=0,
+    )
+    knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id)
+
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"second body text changed",
+        content_type="article",
+        title="V2",
+    )
+    updated = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    assert updated.id == doc.id
+    assert updated.status == "pending"
+    assert updated.chunk_count == 0
+    assert updated.title == "V2"
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
+
+
+def test_knowledge_document_delete_refuses_when_vector_cleanup_fails(db: Session) -> None:
+    store = MemoryObjectStore()
+
+    class BoomVectors(MemoryChunkVectorStore):
+        def delete_document(self, *, user_id: uuid.UUID, document_id: uuid.UUID) -> None:
+            raise RuntimeError("milvus down")
+
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(store, vectors=BoomVectors())
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-delete-fail"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"keep me",
+        content_type="article",
+        title="Keep",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+
+    with pytest.raises(BizException) as failed:
+        knowledge.delete_document(
+            db,
+            user_id=owner.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        )
+    assert failed.value.code == BizCode.INTERNAL_ERROR
+    assert (
+        knowledge.get_document(
+            db,
+            user_id=owner.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        ).id
+        == doc.id
+    )
+
+
+def test_knowledge_document_process_marks_failed_on_embed_error(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+
+    class BoomEmbedder:
+        dimensions = 4
+
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            raise RuntimeError("embed boom")
+
+        def embed_query(self, text: str) -> list[float]:
+            raise RuntimeError("embed boom")
+
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=BoomEmbedder(),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-fail"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"fail body",
+        content_type="article",
+        title="Fail",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+
+    with pytest.raises(BizException) as failed:
+        knowledge.process_document(
+            db,
+            user_id=owner.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        )
+    assert failed.value.code == BizCode.INTERNAL_ERROR
+
+    refreshed = knowledge.get_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert refreshed.status == "failed"
+    assert refreshed.error_class == "RuntimeError"
+    runs = knowledge.list_process_runs(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert len(runs) == 1
+    assert runs[0].status == "failed"
+    assert runs[0].error_class == "RuntimeError"
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
+
+
+def test_knowledge_document_process_routes(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    url = "https://zhuanlan.zhihu.com/p/process-route"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"route process body",
+        content_type="article",
+        title="Route Process",
+    )
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=8,
+        overlap=0,
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    app.dependency_overrides[KnowledgeService] = lambda: knowledge
+    client = TestClient(app)
+
+    processed = client.post(
+        f"/me/knowledge-bases/{base.id}/documents/{doc.id}/process",
+    )
+    assert processed.json()["code"] == BizCode.SUCCESS
+    assert processed.json()["data"]["document"]["status"] == "success"
+    assert processed.json()["data"]["document"]["chunk_count"] >= 1
+    assert processed.json()["data"]["run"]["status"] == "success"
+    assert "text" not in processed.json()["data"]["run"]
+
+    listed = client.get(
+        f"/me/knowledge-bases/{base.id}/documents/{doc.id}/process-runs",
+    )
+    assert listed.json()["code"] == BizCode.SUCCESS
+    assert len(listed.json()["data"]) == 1
+    assert listed.json()["data"][0]["id"] == processed.json()["data"]["run"]["id"]
     app.dependency_overrides.clear()
 
 
