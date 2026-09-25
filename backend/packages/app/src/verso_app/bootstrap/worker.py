@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from verso_app.worker.handlers import run_portrait_sync_loop
+from verso_app.worker.jobs import run_job_loop
 
 
 def main() -> None:
@@ -12,6 +14,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    threading.Thread(target=run_job_loop, name="verso-job-consumer", daemon=True).start()
     logging.getLogger("verso.worker.portrait").info("portrait sync worker started")
     run_portrait_sync_loop()
 

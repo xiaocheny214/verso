@@ -1,11 +1,26 @@
-from typing import Any, Protocol
+"""RocketMQ 生产者、消费者和投递消息体。import 不连代理。"""
 
+from verso_framework.mq.consumer import RocketMqConsumer
+from verso_framework.mq.event import (
+    DeliveryEvent,
+    JobEventType,
+    KnowledgeProcessPayload,
+    PortraitSyncPayload,
+    new_knowledge_process_event,
+    new_portrait_sync_event,
+    parse_delivery_event,
+)
+from verso_framework.mq.producer import RocketMqProducer, to_broker_message
 
-class MqPublisher(Protocol):
-    """server 只依赖这个端口。本期 Redis Stream / 进程内；以后换 RocketMQ 改实现。"""
-
-    async def publish(self, topic: str, payload: dict[str, Any], *, delay_sec: int = 0) -> None: ...
-
-
-class MqConsumer(Protocol):
-    async def consume(self, topic: str) -> None: ...
+__all__ = [
+    "DeliveryEvent",
+    "JobEventType",
+    "KnowledgeProcessPayload",
+    "PortraitSyncPayload",
+    "RocketMqConsumer",
+    "RocketMqProducer",
+    "new_knowledge_process_event",
+    "new_portrait_sync_event",
+    "parse_delivery_event",
+    "to_broker_message",
+]

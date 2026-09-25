@@ -24,7 +24,8 @@ _poller_started = False
 _poller_lock = threading.Lock()
 
 
-def process_portrait_sync(user_id: str) -> None:
+def sync_portrait(user_id: str) -> None:
+    """执行一次画像同步。失败抛出，由调用方决定是否确认消息。"""
     settings = get_app_settings()
     factory = get_session_factory()
     store = SessionStore(get_redis())
@@ -37,15 +38,21 @@ def process_portrait_sync(user_id: str) -> None:
                 classifier=build_evidence_classifier(settings),
             ).sync(uuid.UUID(user_id))
             session.commit()
-        except BizException as exc:
-            session.rollback()
-            if exc.code == BizCode.UNAUTHORIZED:
-                logger.info("画像同步跳过：授权过期 user_id=%s", user_id)
-            else:
-                logger.warning("画像同步业务失败 user_id=%s code=%s", user_id, exc.code)
         except Exception:
             session.rollback()
-            logger.exception("画像同步失败 user_id=%s", user_id)
+            raise
+
+
+def process_portrait_sync(user_id: str) -> None:
+    try:
+        sync_portrait(user_id)
+    except BizException as exc:
+        if exc.code == BizCode.UNAUTHORIZED:
+            logger.info("画像同步跳过：授权过期 user_id=%s", user_id)
+        else:
+            logger.warning("画像同步业务失败 user_id=%s code=%s", user_id, exc.code)
+    except Exception:
+        logger.exception("画像同步失败 user_id=%s", user_id)
 
 
 def enqueue_stale_portraits(queue: PortraitSyncQueue) -> int:
