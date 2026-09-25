@@ -441,6 +441,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Process Knowledge Document */
+        post: operations["process_knowledge_document_me_knowledge_bases__knowledge_base_id__documents__document_id__process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}/process-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Knowledge Document Process Runs */
+        get: operations["list_knowledge_document_process_runs_me_knowledge_bases__knowledge_base_id__documents__document_id__process_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/portrait/self-report": {
         parameters: {
             query?: never;
@@ -604,6 +638,40 @@ export interface components {
              * Format: uuid
              */
             exchange_id: string;
+        };
+        /** DocumentProcessResultView */
+        DocumentProcessResultView: {
+            document: components["schemas"]["KnowledgeDocumentView"];
+            run: components["schemas"]["DocumentProcessRunView"];
+        };
+        /** DocumentProcessRunView */
+        DocumentProcessRunView: {
+            /** Chunk Count */
+            chunk_count?: number | null;
+            /** Chunk Size */
+            chunk_size?: number | null;
+            /** Chunk Strategy */
+            chunk_strategy?: string | null;
+            /** Document Id */
+            document_id: string;
+            /** Error Class */
+            error_class?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Overlap */
+            overlap?: number | null;
+            /** Process Mode */
+            process_mode?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /** Total Duration Ms */
+            total_duration_ms?: number | null;
         };
         /**
          * Eligibility
@@ -1027,6 +1095,28 @@ export interface components {
              */
             timestamp?: string | null;
         };
+        /** Response[DocumentProcessResultView] */
+        Response_DocumentProcessResultView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["DocumentProcessResultView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
         /** Response[ExchangeView] */
         Response_ExchangeView_: {
             /**
@@ -1238,6 +1328,31 @@ export interface components {
             code: number;
             /** @description 业务数据 */
             data?: components["schemas"]["UserCard"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
+        /** Response[list[DocumentProcessRunView]] */
+        Response_list_DocumentProcessRunView__: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["DocumentProcessRunView"][] | null;
             /**
              * Message
              * @description 提示信息
@@ -2274,6 +2389,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Response_ChunkPreviewView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_knowledge_document_me_knowledge_bases__knowledge_base_id__documents__document_id__process_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledge_base_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_DocumentProcessResultView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_knowledge_document_process_runs_me_knowledge_bases__knowledge_base_id__documents__document_id__process_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledge_base_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_list_DocumentProcessRunView__"];
                 };
             };
             /** @description Validation Error */

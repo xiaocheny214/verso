@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from verso_app.server.auth.models import User
-from verso_app.server.knowledge.models import KnowledgeBase, KnowledgeDocument
+from verso_app.server.knowledge.models import (
+    DocumentProcessRun,
+    KnowledgeBase,
+    KnowledgeDocument,
+)
 from verso_app.server.knowledge.service import KnowledgeService
 from verso_app.web.api.collect import (
     BrowserCaptureBody,
@@ -26,6 +30,8 @@ from verso_common.models import (
     ArchiveQueueView,
     ArticleArchiveView,
     ChunkPreviewView,
+    DocumentProcessResultView,
+    DocumentProcessRunView,
     FailedFetchListView,
     KnowledgeBaseView,
     KnowledgeDocumentView,
@@ -100,6 +106,24 @@ def _document_view(row: KnowledgeDocument) -> KnowledgeDocumentView:
         error_class=row.error_class,
         source_type=row.source_type,
         source_url=row.source_url,
+    )
+
+
+def _run_view(row: DocumentProcessRun) -> DocumentProcessRunView:
+    return DocumentProcessRunView(
+        id=str(row.id),
+        document_id=str(row.document_id),
+        status=row.status,
+        process_mode=row.process_mode,
+        chunk_strategy=row.chunk_strategy,
+        chunk_size=row.chunk_size,
+        overlap=row.overlap,
+        chunk_count=row.chunk_count,
+        error_class=row.error_class,
+        error_message=row.error_message,
+        total_duration_ms=row.total_duration_ms,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
     )
 
 
@@ -288,6 +312,42 @@ def preview_knowledge_document_chunks(
         overlap=body.overlap if "overlap" in fields else None,
     )
     return ApiResponse.success(_preview_view(document_id, result))
+
+
+@router.post("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}/process")
+def process_knowledge_document(
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[DocumentProcessResultView]:
+    document, run = knowledge.process_document(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        document_id=document_id,
+    )
+    return ApiResponse.success(
+        DocumentProcessResultView(document=_document_view(document), run=_run_view(run))
+    )
+
+
+@router.get("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}/process-runs")
+def list_knowledge_document_process_runs(
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[list[DocumentProcessRunView]]:
+    rows = knowledge.list_process_runs(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        document_id=document_id,
+    )
+    return ApiResponse.success([_run_view(row) for row in rows])
 
 
 @router.delete("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}")

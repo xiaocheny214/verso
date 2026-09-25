@@ -4,7 +4,7 @@ from verso_common.enums.article import ArticleStatus
 from verso_common.enums.auth import UserStatus
 from verso_common.enums.biz_code import BizCode
 from verso_common.enums.chunk import ChunkStrategy
-from verso_common.enums.document import DocumentStatus
+from verso_common.enums.document import DocumentStatus, ProcessRunStatus
 from verso_common.enums.exchange import ExchangeStatus
 from verso_common.enums.match import MatchConditionStatus, MatchEvaluationOutcome
 from verso_common.enums.model import ModelErrorType
@@ -25,6 +25,7 @@ __all__ = [
     "ModelErrorType",
     "PortraitHorizon",
     "PortraitSource",
+    "ProcessRunStatus",
     "RealtimeChannel",
     "ReviewVerdict",
     "StrengthTag",
