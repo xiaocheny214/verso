@@ -55,6 +55,27 @@ class KnowledgeBaseView(BaseModel):
     storage_profile_id: str | None = None
 
 
+class KnowledgeDocumentView(BaseModel):
+    id: str
+    knowledge_base_id: str
+    title: str
+    enabled: bool
+    chunk_count: int
+    object_key: str
+    content_type: str
+    mime_type: str | None = None
+    byte_size: int | None = None
+    content_hash: str | None = None
+    process_mode: str
+    chunk_strategy: str
+    chunk_size: int | None = None
+    overlap: int | None = None
+    status: str
+    error_class: str | None = None
+    source_type: str
+    source_url: str | None = None
+
+
 class FailedFetchListView(BaseModel):
     items: list[ArticleArchiveView] = Field(default_factory=list)
     capture_token: str = ""

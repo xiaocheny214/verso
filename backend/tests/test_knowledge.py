@@ -151,6 +151,155 @@ def test_knowledge_base_delete_ignores_collection_records(db: Session) -> None:
     assert db.get(KnowledgeBase, knowledge_base.id) is None
 
 
+def test_knowledge_document_crud_from_collect(db: Session) -> None:
+    service = KnowledgeService()
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    owner = _user(db)
+    outsider = _user(db, token="token-b")
+    base_a = service.create(db, user_id=owner.id, name="Writing")
+    base_b = service.create(db, user_id=owner.id, name="Drafts")
+    url = "https://zhuanlan.zhihu.com/p/doc-1"
+
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"# body",
+        content_type="article",
+        title="Doc One",
+    )
+
+    attached = service.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base_a.id,
+        source_url=url,
+        collect=archive,
+    )
+    assert attached.status == "pending"
+    assert attached.chunk_count == 0
+    assert attached.source_type == "zhihu"
+    assert attached.title == "Doc One"
+    assert attached.content_type == "markdown"
+
+    again = service.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base_a.id,
+        source_url=url,
+        collect=archive,
+    )
+    assert again.id == attached.id
+
+    assert [
+        row.id for row in service.list_documents(db, user_id=owner.id, knowledge_base_id=base_a.id)
+    ] == [attached.id]
+    assert service.list_documents(db, user_id=owner.id, knowledge_base_id=base_b.id) == []
+
+    with pytest.raises(BizException) as not_ready:
+        service.attach_from_collect(
+            db,
+            user_id=owner.id,
+            knowledge_base_id=base_a.id,
+            source_url="https://zhuanlan.zhihu.com/p/missing",
+            collect=archive,
+        )
+    assert not_ready.value.code == BizCode.BAD_REQUEST
+
+    patched = service.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base_a.id,
+        document_id=attached.id,
+        title="Renamed",
+        enabled=False,
+        process_mode="none",
+    )
+    assert patched.title == "Renamed"
+    assert patched.enabled is False
+    assert patched.process_mode == "none"
+    assert patched.status == "pending"
+
+    with pytest.raises(BizException) as hidden:
+        service.get_document(
+            db,
+            user_id=outsider.id,
+            knowledge_base_id=base_a.id,
+            document_id=attached.id,
+        )
+    assert hidden.value.code == BizCode.NOT_FOUND
+
+    with pytest.raises(BizException) as refuse:
+        service.delete(db, user_id=owner.id, knowledge_base_id=base_a.id)
+    assert refuse.value.code == BizCode.CONFLICT
+    assert db.get(KnowledgeBase, base_a.id) is not None
+
+    service.delete_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base_a.id,
+        document_id=attached.id,
+    )
+    assert service.list_documents(db, user_id=owner.id, knowledge_base_id=base_a.id) == []
+    service.delete(db, user_id=owner.id, knowledge_base_id=base_a.id)
+    assert db.get(KnowledgeBase, base_a.id) is None
+
+
+def test_knowledge_document_routes(db: Session) -> None:
+    owner = _user(db)
+    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    url = "https://zhuanlan.zhihu.com/p/route-1"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"route body",
+        content_type="article",
+        title="Route Doc",
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    from verso_app.web.middleware.auth import get_collect_service
+
+    app.dependency_overrides[get_collect_service] = lambda: archive
+    client = TestClient(app)
+
+    created = client.post("/me/knowledge-bases", json={"name": "Writing"})
+    knowledge_base_id = created.json()["data"]["id"]
+
+    attached = client.post(
+        f"/me/knowledge-bases/{knowledge_base_id}/documents/from-collect",
+        json={"source_url": url},
+    )
+    assert attached.json()["code"] == BizCode.SUCCESS
+    document_id = attached.json()["data"]["id"]
+    assert attached.json()["data"]["status"] == "pending"
+    assert attached.json()["data"]["source_url"] == url
+
+    listed = client.get(f"/me/knowledge-bases/{knowledge_base_id}/documents")
+    assert [item["id"] for item in listed.json()["data"]] == [document_id]
+
+    legacy_list = client.get(f"/me/knowledge-bases/{knowledge_base_id}/articles")
+    assert [item["id"] for item in legacy_list.json()["data"]] == [document_id]
+    assert "source_type" in legacy_list.json()["data"][0]
+
+    patched = client.patch(
+        f"/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}",
+        json={"title": "Patched", "chunk_size": 500},
+    )
+    assert patched.json()["code"] == BizCode.SUCCESS
+    assert patched.json()["data"]["title"] == "Patched"
+    assert patched.json()["data"]["chunk_size"] == 500
+
+    deleted = client.delete(f"/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}")
+    assert deleted.json()["code"] == BizCode.SUCCESS
+    assert client.get(f"/me/knowledge-bases/{knowledge_base_id}/documents").json()["data"] == []
+
+    app.dependency_overrides.clear()
+
+
 def test_collection_record_does_not_require_knowledge_base(db: Session) -> None:
     archive = CollectService(MemoryObjectStore(), key_prefix="articles")
     user = _user(db)

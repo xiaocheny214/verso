@@ -1,4 +1,4 @@
-"""当前用户知识库与按库访问文章。"""
+"""当前用户知识库与库内文档。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from verso_app.server.auth.models import User
-from verso_app.server.knowledge.models import KnowledgeBase
+from verso_app.server.knowledge.models import KnowledgeBase, KnowledgeDocument
 from verso_app.server.knowledge.service import KnowledgeService
 from verso_app.web.api.collect import (
     BrowserCaptureBody,
@@ -27,6 +27,7 @@ from verso_common.models import (
     ArticleArchiveView,
     FailedFetchListView,
     KnowledgeBaseView,
+    KnowledgeDocumentView,
 )
 from verso_common.result import Response as ApiResponse
 
@@ -48,6 +49,19 @@ class KnowledgeBasePatchBody(BaseModel):
     storage_profile_id: uuid.UUID | None = None
 
 
+class FromCollectBody(BaseModel):
+    source_url: str = Field(min_length=1)
+
+
+class KnowledgeDocumentPatchBody(BaseModel):
+    title: str | None = None
+    enabled: bool | None = None
+    process_mode: str | None = None
+    chunk_strategy: str | None = None
+    chunk_size: int | None = None
+    overlap: int | None = None
+
+
 def _base_view(row: KnowledgeBase) -> KnowledgeBaseView:
     return KnowledgeBaseView(
         id=str(row.id),
@@ -55,6 +69,29 @@ def _base_view(row: KnowledgeBase) -> KnowledgeBaseView:
         embedding_model=row.embedding_model,
         collection_name=row.collection_name,
         storage_profile_id=str(row.storage_profile_id) if row.storage_profile_id else None,
+    )
+
+
+def _document_view(row: KnowledgeDocument) -> KnowledgeDocumentView:
+    return KnowledgeDocumentView(
+        id=str(row.id),
+        knowledge_base_id=str(row.knowledge_base_id),
+        title=row.title,
+        enabled=row.enabled,
+        chunk_count=row.chunk_count,
+        object_key=row.object_key,
+        content_type=row.content_type,
+        mime_type=row.mime_type,
+        byte_size=row.byte_size,
+        content_hash=row.content_hash,
+        process_mode=row.process_mode,
+        chunk_strategy=row.chunk_strategy,
+        chunk_size=row.chunk_size,
+        overlap=row.overlap,
+        status=row.status,
+        error_class=row.error_class,
+        source_type=row.source_type,
+        source_url=row.source_url,
     )
 
 
@@ -129,17 +166,107 @@ def delete_knowledge_base(
     return ApiResponse.success()
 
 
+@router.get("/me/knowledge-bases/{knowledge_base_id}/documents")
+def list_knowledge_documents(
+    knowledge_base_id: uuid.UUID,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[list[KnowledgeDocumentView]]:
+    rows = knowledge.list_documents(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
+    return ApiResponse.success([_document_view(row) for row in rows])
+
+
+@router.post("/me/knowledge-bases/{knowledge_base_id}/documents/from-collect")
+def attach_knowledge_document_from_collect(
+    knowledge_base_id: uuid.UUID,
+    body: FromCollectBody,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    collect: CollectDep,
+    user: UserDep,
+) -> ApiResponse[KnowledgeDocumentView]:
+    row = knowledge.attach_from_collect(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        source_url=body.source_url,
+        collect=collect,
+    )
+    return ApiResponse.success(_document_view(row))
+
+
+@router.get("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}")
+def get_knowledge_document(
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[KnowledgeDocumentView]:
+    row = knowledge.get_document(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        document_id=document_id,
+    )
+    return ApiResponse.success(_document_view(row))
+
+
+@router.patch("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}")
+def patch_knowledge_document(
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    body: KnowledgeDocumentPatchBody,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[KnowledgeDocumentView]:
+    fields = body.model_fields_set
+    row = knowledge.update_document(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        document_id=document_id,
+        title=body.title if "title" in fields else None,
+        enabled=body.enabled if "enabled" in fields else None,
+        process_mode=body.process_mode if "process_mode" in fields else None,
+        chunk_strategy=body.chunk_strategy if "chunk_strategy" in fields else None,
+        chunk_size=body.chunk_size if "chunk_size" in fields else None,
+        overlap=body.overlap if "overlap" in fields else None,
+        clear_chunk_size="chunk_size" in fields and body.chunk_size is None,
+        clear_overlap="overlap" in fields and body.overlap is None,
+    )
+    return ApiResponse.success(_document_view(row))
+
+
+@router.delete("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}")
+def delete_knowledge_document(
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[None]:
+    knowledge.delete_document(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        document_id=document_id,
+    )
+    return ApiResponse.success()
+
+
 @router.get("/me/knowledge-bases/{knowledge_base_id}/articles")
 def list_knowledge_base_articles(
     knowledge_base_id: uuid.UUID,
     session: SessionDep,
     knowledge: KnowledgeDep,
-    collect: CollectDep,
     user: UserDep,
-) -> ApiResponse[list[ArticleArchiveView]]:
-    knowledge.get(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
-    rows = collect.list_by_user(session, user_id=user.id)
-    return ApiResponse.success([_view(row) for row in rows])
+) -> ApiResponse[list[KnowledgeDocumentView]]:
+    """兼容旧路径：按库列出文档元数据（不再扁平返回 collect）。"""
+    rows = knowledge.list_documents(session, user_id=user.id, knowledge_base_id=knowledge_base_id)
+    return ApiResponse.success([_document_view(row) for row in rows])
 
 
 @router.get("/me/knowledge-bases/{knowledge_base_id}/articles/queue")
