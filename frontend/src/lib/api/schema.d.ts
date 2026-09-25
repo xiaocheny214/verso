@@ -424,6 +424,23 @@ export interface paths {
         patch: operations["patch_knowledge_document_me_knowledge_bases__knowledge_base_id__documents__document_id__patch"];
         trace?: never;
     };
+    "/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}/chunk-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Knowledge Document Chunks */
+        post: operations["preview_knowledge_document_chunks_me_knowledge_bases__knowledge_base_id__documents__document_id__chunk_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/portrait/self-report": {
         parameters: {
             query?: never;
@@ -555,6 +572,30 @@ export interface components {
             title: string;
             /** Token */
             token: string;
+        };
+        /** ChunkPreviewBody */
+        ChunkPreviewBody: {
+            /** Chunk Size */
+            chunk_size?: number | null;
+            /** Chunk Strategy */
+            chunk_strategy?: string | null;
+            /** Overlap */
+            overlap?: number | null;
+        };
+        /** ChunkPreviewView */
+        ChunkPreviewView: {
+            /** Chunk Size */
+            chunk_size: number;
+            /** Chunks */
+            chunks?: components["schemas"]["TextChunkView"][];
+            /** Document Id */
+            document_id: string;
+            /** Overlap */
+            overlap: number;
+            /** Source Char Count */
+            source_char_count: number;
+            /** Strategy */
+            strategy: string;
         };
         /** CreateReviewBody */
         CreateReviewBody: {
@@ -964,6 +1005,28 @@ export interface components {
              */
             timestamp?: string | null;
         };
+        /** Response[ChunkPreviewView] */
+        Response_ChunkPreviewView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["ChunkPreviewView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
         /** Response[ExchangeView] */
         Response_ExchangeView_: {
             /**
@@ -1292,6 +1355,19 @@ export interface components {
             want_tag: components["schemas"]["StrengthTag"];
             /** Want Text */
             want_text: string;
+        };
+        /** TextChunkView */
+        TextChunkView: {
+            /** Char Count */
+            char_count: number;
+            /** Char End */
+            char_end: number;
+            /** Char Start */
+            char_start: number;
+            /** Index */
+            index: number;
+            /** Text */
+            text: string;
         };
         /** UserCard */
         UserCard: {
@@ -2162,6 +2238,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Response_KnowledgeDocumentView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_knowledge_document_chunks_me_knowledge_bases__knowledge_base_id__documents__document_id__chunk_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledge_base_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChunkPreviewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_ChunkPreviewView_"];
                 };
             };
             /** @description Validation Error */

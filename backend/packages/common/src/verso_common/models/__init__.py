@@ -76,6 +76,23 @@ class KnowledgeDocumentView(BaseModel):
     source_url: str | None = None
 
 
+class TextChunkView(BaseModel):
+    index: int
+    text: str
+    char_start: int
+    char_end: int
+    char_count: int
+
+
+class ChunkPreviewView(BaseModel):
+    document_id: str
+    chunks: list[TextChunkView] = Field(default_factory=list)
+    strategy: str
+    chunk_size: int
+    overlap: int
+    source_char_count: int
+
+
 class FailedFetchListView(BaseModel):
     items: list[ArticleArchiveView] = Field(default_factory=list)
     capture_token: str = ""

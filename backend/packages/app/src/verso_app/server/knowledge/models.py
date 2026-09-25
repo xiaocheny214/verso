@@ -23,7 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from verso_common.enums import DocumentStatus
+from verso_common.enums import ChunkStrategy, DocumentStatus
 from verso_framework.db.base import Base
 
 
@@ -86,7 +86,7 @@ class KnowledgeDocument(Base):
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     process_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="chunk")
     chunk_strategy: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="paragraph_window"
+        String(32), nullable=False, default=ChunkStrategy.FIXED_SIZE
     )
     chunk_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     overlap: Mapped[int | None] = mapped_column(Integer, nullable=True)
