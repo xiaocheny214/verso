@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import time
 import uuid
-from contextlib import suppress
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -253,6 +252,8 @@ class KnowledgeService:
                 and existing.content_hash == record.content_hash
             ):
                 return existing
+            # 正文变更：回 pending，并清掉旧向量，避免 retrieve 命中过期块。
+            self._vector_store().delete_document(document_id=existing.id)
             existing.title = record.title
             existing.object_key = record.object_key
             existing.content_type = "markdown"
@@ -548,10 +549,16 @@ class KnowledgeService:
             knowledge_base_id=knowledge_base_id,
             document_id=document_id,
         )
-        # 与 collect 可能共享 object_key：本切片只删元数据，不删对象字节。
-        # 向量清理失败不阻断元数据删除；孤儿点可在后续 process 覆盖。
-        with suppress(Exception):
+        # 先清 Milvus，再删 PG（process_runs 随 document FK CASCADE）。
+        # 不删对象存储：object_key 常与 collect 共享；正文生命周期归 collect。
+        # 无 knowledge_chunks 表：块定位只在 Milvus（chunk_index + char_*）。
+        try:
             self._vector_store().delete_document(document_id=row.id)
+        except Exception as exc:
+            raise BizException(
+                "文档向量清理失败，未删除文档元数据",
+                code=BizCode.INTERNAL_ERROR,
+            ) from exc
         db.delete(row)
         db.flush()
 

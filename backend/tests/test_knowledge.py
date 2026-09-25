@@ -154,8 +154,10 @@ def test_knowledge_base_delete_ignores_collection_records(db: Session) -> None:
 
 
 def test_knowledge_document_crud_from_collect(db: Session) -> None:
-    service = KnowledgeService()
-    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    service = KnowledgeService.with_deps(store, vectors=vectors)
+    archive = CollectService(store, key_prefix="articles")
     owner = _user(db)
     outsider = _user(db, token="token-b")
     base_a = service.create(db, user_id=owner.id, name="Writing")
@@ -243,13 +245,18 @@ def test_knowledge_document_crud_from_collect(db: Session) -> None:
         document_id=attached.id,
     )
     assert service.list_documents(db, user_id=owner.id, knowledge_base_id=base_a.id) == []
+    # collect 正文仍在对象存储（共享 object_key，删文档不删 Kodo）
+    assert store.get(attached.object_key) == b"# body"
     service.delete(db, user_id=owner.id, knowledge_base_id=base_a.id)
     assert db.get(KnowledgeBase, base_a.id) is None
 
 
 def test_knowledge_document_routes(db: Session) -> None:
     owner = _user(db)
-    archive = CollectService(MemoryObjectStore(), key_prefix="articles")
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(store, vectors=vectors)
     url = "https://zhuanlan.zhihu.com/p/route-1"
     archive.put_markdown(
         db,
@@ -266,6 +273,7 @@ def test_knowledge_document_routes(db: Session) -> None:
     from verso_app.web.middleware.auth import get_collect_service
 
     app.dependency_overrides[get_collect_service] = lambda: archive
+    app.dependency_overrides[KnowledgeService] = lambda: knowledge
     client = TestClient(app)
 
     created = client.post("/me/knowledge-bases", json={"name": "Writing"})
@@ -567,6 +575,173 @@ def test_knowledge_document_process_mode_none_clears_vectors(db: Session) -> Non
     assert run.status == "success"
     assert run.chunk_count == 0
     assert vectors.list_document_ids(document_id=doc.id) == []
+
+
+def test_knowledge_document_delete_clears_vectors_keeps_object(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-delete"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"delete me please",
+        content_type="article",
+        title="Delete",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=8,
+        overlap=0,
+    )
+    knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(document_id=doc.id)
+    object_key = doc.object_key
+
+    knowledge.delete_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(document_id=doc.id) == []
+    assert store.get(object_key) == b"delete me please"
+    assert knowledge.list_documents(db, user_id=owner.id, knowledge_base_id=base.id) == []
+
+
+def test_knowledge_reattach_changed_body_clears_vectors(db: Session) -> None:
+    store = MemoryObjectStore()
+    vectors = MemoryChunkVectorStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(
+        store,
+        embedder=HashingEmbedder(dims=4),
+        vectors=vectors,
+    )
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-reattach"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"first body text",
+        content_type="article",
+        title="V1",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_size=8,
+        overlap=0,
+    )
+    knowledge.process_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )
+    assert vectors.list_document_ids(document_id=doc.id)
+
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"second body text changed",
+        content_type="article",
+        title="V2",
+    )
+    updated = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+    assert updated.id == doc.id
+    assert updated.status == "pending"
+    assert updated.chunk_count == 0
+    assert updated.title == "V2"
+    assert vectors.list_document_ids(document_id=doc.id) == []
+
+
+def test_knowledge_document_delete_refuses_when_vector_cleanup_fails(db: Session) -> None:
+    store = MemoryObjectStore()
+
+    class BoomVectors(MemoryChunkVectorStore):
+        def delete_document(self, *, document_id: uuid.UUID) -> None:
+            raise RuntimeError("milvus down")
+
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(store, vectors=BoomVectors())
+    owner = _user(db)
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/process-delete-fail"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=b"keep me",
+        content_type="article",
+        title="Keep",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+
+    with pytest.raises(BizException) as failed:
+        knowledge.delete_document(
+            db,
+            user_id=owner.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        )
+    assert failed.value.code == BizCode.INTERNAL_ERROR
+    assert (
+        knowledge.get_document(
+            db,
+            user_id=owner.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        ).id
+        == doc.id
+    )
 
 
 def test_knowledge_document_process_marks_failed_on_embed_error(db: Session) -> None:
