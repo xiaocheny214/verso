@@ -277,6 +277,7 @@ def test_knowledge_document_routes(db: Session) -> None:
     document_id = attached.json()["data"]["id"]
     assert attached.json()["data"]["status"] == "pending"
     assert attached.json()["data"]["source_url"] == url
+    assert attached.json()["data"]["chunk_strategy"] == "fixed_size"
 
     listed = client.get(f"/me/knowledge-bases/{knowledge_base_id}/documents")
     assert [item["id"] for item in listed.json()["data"]] == [document_id]
@@ -297,6 +298,111 @@ def test_knowledge_document_routes(db: Session) -> None:
     assert deleted.json()["code"] == BizCode.SUCCESS
     assert client.get(f"/me/knowledge-bases/{knowledge_base_id}/documents").json()["data"] == []
 
+    app.dependency_overrides.clear()
+
+
+def test_knowledge_document_chunk_preview(db: Session) -> None:
+    store = MemoryObjectStore()
+    archive = CollectService(store, key_prefix="articles")
+    knowledge = KnowledgeService.with_deps(store)
+    owner = _user(db)
+    outsider = _user(db, token="token-b")
+    base = knowledge.create(db, user_id=owner.id, name="Writing")
+    url = "https://zhuanlan.zhihu.com/p/preview-1"
+    body = b"# Hello\n\n" + b"abcdefghi\n\n" + b"xyz"
+    archive.put_markdown(
+        db,
+        user_id=owner.id,
+        source_url=url,
+        data=body,
+        content_type="article",
+        title="Preview",
+    )
+    doc = knowledge.attach_from_collect(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        source_url=url,
+        collect=archive,
+    )
+
+    _row, preview = knowledge.preview_chunks(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_strategy="fixed_size",
+        chunk_size=8,
+        overlap=0,
+    )
+    assert preview.strategy.value == "fixed_size"
+    assert preview.chunks
+    assert all(chunk.text for chunk in preview.chunks)
+
+    structure = knowledge.preview_chunks(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        chunk_strategy="structure_aware",
+        chunk_size=40,
+        overlap=0,
+    )[1]
+    assert structure.strategy.value == "structure_aware"
+    assert structure.chunks[0].text.startswith("# Hello")
+
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        process_mode="none",
+    )
+    empty = knowledge.preview_chunks(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+    )[1]
+    assert empty.chunks == ()
+
+    with pytest.raises(BizException) as hidden:
+        knowledge.preview_chunks(
+            db,
+            user_id=outsider.id,
+            knowledge_base_id=base.id,
+            document_id=doc.id,
+        )
+    assert hidden.value.code == BizCode.NOT_FOUND
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: owner
+    app.dependency_overrides[KnowledgeService] = lambda: knowledge
+    client = TestClient(app)
+    response = client.post(
+        f"/me/knowledge-bases/{base.id}/documents/{doc.id}/chunk-preview",
+        json={"chunk_strategy": "fixed_size", "chunk_size": 10, "overlap": 0},
+    )
+    # process_mode still none from earlier
+    assert response.json()["code"] == BizCode.SUCCESS
+    assert response.json()["data"]["chunks"] == []
+
+    knowledge.update_document(
+        db,
+        user_id=owner.id,
+        knowledge_base_id=base.id,
+        document_id=doc.id,
+        process_mode="chunk",
+    )
+    live = client.post(
+        f"/me/knowledge-bases/{base.id}/documents/{doc.id}/chunk-preview",
+        json={"chunk_strategy": "fixed_size", "chunk_size": 10, "overlap": 0},
+    )
+    assert live.json()["code"] == BizCode.SUCCESS
+    assert live.json()["data"]["document_id"] == str(doc.id)
+    assert live.json()["data"]["chunks"]
+    assert "text" in live.json()["data"]["chunks"][0]
     app.dependency_overrides.clear()
 
 

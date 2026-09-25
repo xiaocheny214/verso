@@ -25,9 +25,11 @@ from verso_common.exceptions import BizException
 from verso_common.models import (
     ArchiveQueueView,
     ArticleArchiveView,
+    ChunkPreviewView,
     FailedFetchListView,
     KnowledgeBaseView,
     KnowledgeDocumentView,
+    TextChunkView,
 )
 from verso_common.result import Response as ApiResponse
 
@@ -57,6 +59,12 @@ class KnowledgeDocumentPatchBody(BaseModel):
     title: str | None = None
     enabled: bool | None = None
     process_mode: str | None = None
+    chunk_strategy: str | None = None
+    chunk_size: int | None = None
+    overlap: int | None = None
+
+
+class ChunkPreviewBody(BaseModel):
     chunk_strategy: str | None = None
     chunk_size: int | None = None
     overlap: int | None = None
@@ -92,6 +100,26 @@ def _document_view(row: KnowledgeDocument) -> KnowledgeDocumentView:
         error_class=row.error_class,
         source_type=row.source_type,
         source_url=row.source_url,
+    )
+
+
+def _preview_view(document_id: uuid.UUID, result) -> ChunkPreviewView:
+    return ChunkPreviewView(
+        document_id=str(document_id),
+        chunks=[
+            TextChunkView(
+                index=chunk.index,
+                text=chunk.text,
+                char_start=chunk.char_start,
+                char_end=chunk.char_end,
+                char_count=chunk.char_count,
+            )
+            for chunk in result.chunks
+        ],
+        strategy=result.strategy,
+        chunk_size=result.chunk_size,
+        overlap=result.overlap,
+        source_char_count=result.source_char_count,
     )
 
 
@@ -238,6 +266,28 @@ def patch_knowledge_document(
         clear_overlap="overlap" in fields and body.overlap is None,
     )
     return ApiResponse.success(_document_view(row))
+
+
+@router.post("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}/chunk-preview")
+def preview_knowledge_document_chunks(
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    body: ChunkPreviewBody,
+    session: SessionDep,
+    knowledge: KnowledgeDep,
+    user: UserDep,
+) -> ApiResponse[ChunkPreviewView]:
+    fields = body.model_fields_set
+    _row, result = knowledge.preview_chunks(
+        session,
+        user_id=user.id,
+        knowledge_base_id=knowledge_base_id,
+        document_id=document_id,
+        chunk_strategy=body.chunk_strategy if "chunk_strategy" in fields else None,
+        chunk_size=body.chunk_size if "chunk_size" in fields else None,
+        overlap=body.overlap if "overlap" in fields else None,
+    )
+    return ApiResponse.success(_preview_view(document_id, result))
 
 
 @router.delete("/me/knowledge-bases/{knowledge_base_id}/documents/{document_id}")

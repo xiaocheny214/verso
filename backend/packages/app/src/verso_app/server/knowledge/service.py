@@ -8,11 +8,18 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from verso_app.server.chunk import (
+    ChunkService,
+    ChunkSplitResult,
+    normalize_chunk_strategy,
+    parse_chunk_strategy_params,
+)
 from verso_app.server.collect.service import CollectService
 from verso_app.server.knowledge.models import KnowledgeBase, KnowledgeDocument
-from verso_common.enums import ArticleStatus, BizCode, DocumentStatus
+from verso_common.enums import ArticleStatus, BizCode, ChunkStrategy, DocumentStatus
 from verso_common.exceptions import BizException
 from verso_framework.config import get_app_settings
+from verso_framework.storage import ObjectStore, ObjectStoreError, get_object_store
 
 _COLLECTION_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
 _PROCESS_MODES = frozenset({"chunk", "none"})
@@ -20,6 +27,28 @@ _PROCESS_MODES = frozenset({"chunk", "none"})
 
 class KnowledgeService:
     """当前用户拥有的知识库与文档。所有按 id 的查询都带 user_id。"""
+
+    def __init__(self) -> None:
+        self._store: ObjectStore | None = None
+        self._chunker = ChunkService()
+
+    @classmethod
+    def with_deps(
+        cls,
+        store: ObjectStore | None = None,
+        *,
+        chunker: ChunkService | None = None,
+    ) -> KnowledgeService:
+        service = cls()
+        service._store = store
+        if chunker is not None:
+            service._chunker = chunker
+        return service
+
+    def _object_store(self) -> ObjectStore:
+        if self._store is None:
+            self._store = get_object_store()
+        return self._store
 
     def create(
         self,
@@ -155,6 +184,7 @@ class KnowledgeService:
         )
         if row is None:
             raise BizException("文档不存在", code=BizCode.NOT_FOUND)
+        self._normalize_legacy_strategy(db, row)
         return row
 
     def attach_from_collect(
@@ -215,7 +245,7 @@ class KnowledgeService:
             byte_size=record.byte_size,
             content_hash=record.content_hash,
             process_mode="chunk",
-            chunk_strategy="paragraph_window",
+            chunk_strategy=ChunkStrategy.FIXED_SIZE,
             status=DocumentStatus.PENDING,
             source_type="zhihu",
             source_url=clean_url,
@@ -256,10 +286,7 @@ class KnowledgeService:
                 raise BizException("process_mode 无效", code=BizCode.BAD_REQUEST)
             row.process_mode = clean_mode
         if chunk_strategy is not None:
-            clean_strategy = chunk_strategy.strip()
-            if not clean_strategy:
-                raise BizException("chunk_strategy 不能为空", code=BizCode.BAD_REQUEST)
-            row.chunk_strategy = clean_strategy
+            row.chunk_strategy = normalize_chunk_strategy(chunk_strategy)
         if clear_chunk_size:
             row.chunk_size = None
         elif chunk_size is not None:
@@ -274,6 +301,48 @@ class KnowledgeService:
             row.overlap = overlap
         db.flush()
         return row
+
+    def preview_chunks(
+        self,
+        db: Session,
+        *,
+        user_id: uuid.UUID,
+        knowledge_base_id: uuid.UUID,
+        document_id: uuid.UUID,
+        chunk_strategy: str | None = None,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
+    ) -> tuple[KnowledgeDocument, ChunkSplitResult]:
+        row = self.get_document(
+            db,
+            user_id=user_id,
+            knowledge_base_id=knowledge_base_id,
+            document_id=document_id,
+        )
+        self._normalize_legacy_strategy(db, row)
+
+        params = parse_chunk_strategy_params(
+            strategy=chunk_strategy or row.chunk_strategy,
+            chunk_size=chunk_size if chunk_size is not None else row.chunk_size,
+            overlap=overlap if overlap is not None else row.overlap,
+        )
+        if row.process_mode == "none":
+            return row, self._chunker.split("", params)
+
+        text = self._load_document_text(row)
+        return row, self._chunker.split(text, params)
+
+    def _normalize_legacy_strategy(self, db: Session, row: KnowledgeDocument) -> None:
+        if row.chunk_strategy == "paragraph_window":
+            row.chunk_strategy = ChunkStrategy.FIXED_SIZE
+            db.flush()
+
+    def _load_document_text(self, row: KnowledgeDocument) -> str:
+        try:
+            data = self._object_store().get(row.object_key)
+        except (KeyError, ObjectStoreError) as exc:
+            raise BizException("文档正文不存在", code=BizCode.NOT_FOUND) from exc
+        return data.decode("utf-8")
 
     def delete_document(
         self,
