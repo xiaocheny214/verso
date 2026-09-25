@@ -41,6 +41,8 @@ class AppSettings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = ""
     llm_embedding_model: str = ""
+    # 全站向量维度；None = 用模型默认输出维。process / retrieve / Milvus 必须同一值。
+    llm_embedding_dimensions: int | None = None
     match_retrieval_top_k: int = RETRIEVAL_TOP_K
     match_retrieval_min_score: float = RETRIEVAL_MIN_SCORE
     match_title_fallback_when_no_ready: bool = False

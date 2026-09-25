@@ -35,6 +35,6 @@ def build_embedder(
     *,
     provider: str = "openai_compat",
 ) -> Embedder:
-    """按 provider 名构建 Embedder；默认 openai_compat（LiteLLM）。"""
+    """按 provider 名构建 Embedder；维度只来自全站 settings，调用时不可改。"""
     resolved = settings if settings is not None else get_app_settings()
     return get_embedder_factory(provider)(resolved)

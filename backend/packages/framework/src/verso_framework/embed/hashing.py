@@ -4,12 +4,16 @@ from __future__ import annotations
 
 
 class HashingEmbedder:
-    """把文本 hash 成固定维度向量，便于单测。"""
+    """把文本 hash 成固定维度向量，便于单测。维度在构建时锁定。"""
 
     def __init__(self, *, dims: int = 8) -> None:
         if dims < 1:
             raise ValueError("dims must be >= 1")
         self._dims = dims
+
+    @property
+    def dimensions(self) -> int | None:
+        return self._dims
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [self.embed_query(text) for text in texts]
