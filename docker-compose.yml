@@ -3,7 +3,7 @@
 #   启动服务: docker compose up -d --build
 #   查看日志: docker compose logs -f [service]
 #   停止服务: docker compose down
-#   清理数据: 停掉后删除 ./data/postgres、./data/redis 与 ./data/milvus
+#   清理数据: 停掉后删除 ./data/postgres、./data/redis、./data/milvus 与 ./data/rocketmq
 #   重新构建: docker compose up -d --build
 #
 # worker 入口尚未接线，本期不起 worker 容器。
@@ -111,6 +111,51 @@ services:
     networks:
       - verso-net
 
+  # RocketMQ 5：NameServer + 内嵌 gRPC 代理的 Broker。客户端只连 8081。
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.2
+    container_name: verso-rocketmq-namesrv
+    restart: unless-stopped
+    ports:
+      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+    command: sh mqnamesrv
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/9876"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - verso-net
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.2
+    container_name: verso-rocketmq-broker
+    restart: unless-stopped
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+    ports:
+      - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
+      - "${ROCKETMQ_PROXY_PORT:-8081}:8081"
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+    volumes:
+      - ./deploy/rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
+      - ./data/rocketmq/store:/home/rocketmq/store
+      - ./data/rocketmq/logs:/home/rocketmq/logs
+    command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/broker.conf --enable-proxy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - verso-net
+
   # ── 后端 API 服务 ──
   backend:
     build:
@@ -132,6 +177,7 @@ services:
       VERSO_LLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-verso-dev}
       VERSO_LLM_MODEL: chat
       VERSO_LLM_EMBEDDING_MODEL: embed
+      ROCKETMQ_ENDPOINTS: rocketmq-broker:8081
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -143,6 +189,10 @@ services:
         condition: service_healthy
       litellm:
         condition: service_healthy
+      rocketmq-broker:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - verso-net
 
