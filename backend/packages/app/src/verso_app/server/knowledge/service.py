@@ -253,7 +253,7 @@ class KnowledgeService:
             ):
                 return existing
             # 正文变更：回 pending，并清掉旧向量，避免 retrieve 命中过期块。
-            self._vector_store().delete_document(document_id=existing.id)
+            self._vector_store().delete_document(user_id=user_id, document_id=existing.id)
             existing.title = record.title
             existing.object_key = record.object_key
             existing.content_type = "markdown"
@@ -462,7 +462,7 @@ class KnowledgeService:
         vectors = self._vector_store()
 
         if row.process_mode == "none":
-            vectors.delete_document(document_id=row.id)
+            vectors.delete_document(user_id=user_id, document_id=row.id)
             return 0
 
         params = parse_chunk_strategy_params(
@@ -473,7 +473,7 @@ class KnowledgeService:
         text = self._load_document_text(row)
         split = self._chunker.split(text, params)
         if not split.chunks:
-            vectors.delete_document(document_id=row.id)
+            vectors.delete_document(user_id=user_id, document_id=row.id)
             return 0
 
         embedder = self._get_embedder()
@@ -485,6 +485,11 @@ class KnowledgeService:
         if dimension < 1:
             raise BizException("embedding 维度无效", code=BizCode.INTERNAL_ERROR)
 
+        snapshot = {
+            "title": row.title,
+            "source_type": row.source_type,
+            "source_url": row.source_url or "",
+        }
         points = [
             ChunkVectorPoint(
                 user_id=user_id,
@@ -494,11 +499,12 @@ class KnowledgeService:
                 char_start=chunk.char_start,
                 char_end=chunk.char_end,
                 embedding=embeddings[index],
+                metadata=snapshot,
             )
             for index, chunk in enumerate(split.chunks)
         ]
         vectors.ensure_collection(dimension=dimension)
-        vectors.delete_document(document_id=row.id)
+        vectors.delete_document(user_id=user_id, document_id=row.id)
         vectors.upsert(points)
         return len(points)
 
@@ -553,7 +559,7 @@ class KnowledgeService:
         # 不删对象存储：object_key 常与 collect 共享；正文生命周期归 collect。
         # 无 knowledge_chunks 表：块定位只在 Milvus（chunk_index + char_*）。
         try:
-            self._vector_store().delete_document(document_id=row.id)
+            self._vector_store().delete_document(user_id=user_id, document_id=row.id)
         except Exception as exc:
             raise BizException(
                 "文档向量清理失败，未删除文档元数据",

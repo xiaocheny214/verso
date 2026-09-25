@@ -245,7 +245,7 @@ def test_knowledge_document_crud_from_collect(db: Session) -> None:
         document_id=attached.id,
     )
     assert service.list_documents(db, user_id=owner.id, knowledge_base_id=base_a.id) == []
-    # collect 正文仍在对象存储（共享 object_key，删文档不删 Kodo）
+    # collect æ­£æä»å¨å¯¹è±¡å­å¨ï¼å±äº?object_keyï¼å ææ¡£ä¸å  Kodoï¼?
     assert store.get(attached.object_key) == b"# body"
     service.delete(db, user_id=owner.id, knowledge_base_id=base_a.id)
     assert db.get(KnowledgeBase, base_a.id) is None
@@ -429,7 +429,7 @@ def test_knowledge_document_process_writes_vectors_without_text(db: Session) -> 
     outsider = _user(db, token="token-b")
     base = knowledge.create(db, user_id=owner.id, name="Writing")
     url = "https://zhuanlan.zhihu.com/p/process-1"
-    body = b"abcdefghij"  # 10 chars → 2 chunks at size 5 overlap 0
+    body = b"abcdefghij"  # 10 chars â?2 chunks at size 5 overlap 0
     archive.put_markdown(
         db,
         user_id=owner.id,
@@ -465,7 +465,7 @@ def test_knowledge_document_process_writes_vectors_without_text(db: Session) -> 
     assert document.chunk_count == 2
     assert run.status == "success"
     assert run.chunk_count == 2
-    assert vectors.list_document_ids(document_id=doc.id) == [
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == [
         f"{doc.id}:0",
         f"{doc.id}:1",
     ]
@@ -473,7 +473,9 @@ def test_knowledge_document_process_writes_vectors_without_text(db: Session) -> 
     assert point.char_start == 0
     assert point.char_end == 5
     assert len(point.embedding) == 4
-    assert not hasattr(point, "text")
+    assert not hasattr(point, "text") or "text" not in point.metadata
+    assert point.metadata.get("title") == "Process Me"
+    assert "text" not in point.metadata
 
     # re-process replaces vectors
     knowledge.update_document(
@@ -492,7 +494,7 @@ def test_knowledge_document_process_writes_vectors_without_text(db: Session) -> 
     )
     assert document2.chunk_count == 1
     assert run2.chunk_count == 1
-    assert vectors.list_document_ids(document_id=doc.id) == [f"{doc.id}:0"]
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == [f"{doc.id}:0"]
 
     runs = knowledge.list_process_runs(
         db,
@@ -555,7 +557,7 @@ def test_knowledge_document_process_mode_none_clears_vectors(db: Session) -> Non
         knowledge_base_id=base.id,
         document_id=doc.id,
     )
-    assert vectors.list_document_ids(document_id=doc.id)
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id)
 
     knowledge.update_document(
         db,
@@ -574,7 +576,7 @@ def test_knowledge_document_process_mode_none_clears_vectors(db: Session) -> Non
     assert document.chunk_count == 0
     assert run.status == "success"
     assert run.chunk_count == 0
-    assert vectors.list_document_ids(document_id=doc.id) == []
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
 
 
 def test_knowledge_document_delete_clears_vectors_keeps_object(db: Session) -> None:
@@ -618,7 +620,7 @@ def test_knowledge_document_delete_clears_vectors_keeps_object(db: Session) -> N
         knowledge_base_id=base.id,
         document_id=doc.id,
     )
-    assert vectors.list_document_ids(document_id=doc.id)
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id)
     object_key = doc.object_key
 
     knowledge.delete_document(
@@ -627,7 +629,7 @@ def test_knowledge_document_delete_clears_vectors_keeps_object(db: Session) -> N
         knowledge_base_id=base.id,
         document_id=doc.id,
     )
-    assert vectors.list_document_ids(document_id=doc.id) == []
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
     assert store.get(object_key) == b"delete me please"
     assert knowledge.list_documents(db, user_id=owner.id, knowledge_base_id=base.id) == []
 
@@ -673,7 +675,7 @@ def test_knowledge_reattach_changed_body_clears_vectors(db: Session) -> None:
         knowledge_base_id=base.id,
         document_id=doc.id,
     )
-    assert vectors.list_document_ids(document_id=doc.id)
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id)
 
     archive.put_markdown(
         db,
@@ -694,14 +696,14 @@ def test_knowledge_reattach_changed_body_clears_vectors(db: Session) -> None:
     assert updated.status == "pending"
     assert updated.chunk_count == 0
     assert updated.title == "V2"
-    assert vectors.list_document_ids(document_id=doc.id) == []
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
 
 
 def test_knowledge_document_delete_refuses_when_vector_cleanup_fails(db: Session) -> None:
     store = MemoryObjectStore()
 
     class BoomVectors(MemoryChunkVectorStore):
-        def delete_document(self, *, document_id: uuid.UUID) -> None:
+        def delete_document(self, *, user_id: uuid.UUID, document_id: uuid.UUID) -> None:
             raise RuntimeError("milvus down")
 
     archive = CollectService(store, key_prefix="articles")
@@ -808,7 +810,7 @@ def test_knowledge_document_process_marks_failed_on_embed_error(db: Session) -> 
     assert len(runs) == 1
     assert runs[0].status == "failed"
     assert runs[0].error_class == "RuntimeError"
-    assert vectors.list_document_ids(document_id=doc.id) == []
+    assert vectors.list_document_ids(user_id=owner.id, document_id=doc.id) == []
 
 
 def test_knowledge_document_process_routes(db: Session) -> None:
