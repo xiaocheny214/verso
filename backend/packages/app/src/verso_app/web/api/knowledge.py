@@ -38,11 +38,23 @@ from verso_common.models import (
     TextChunkView,
 )
 from verso_common.result import Response as ApiResponse
+from verso_framework.mq import OutboxService, RocketMqProducer
 
 router = APIRouter(tags=["knowledge"])
 
+_producer: RocketMqProducer | None = None
+
+
+def get_rocketmq_producer() -> RocketMqProducer:
+    global _producer
+    if _producer is None:
+        _producer = RocketMqProducer()
+    return _producer
+
+
 KnowledgeDep = Annotated[KnowledgeService, Depends(KnowledgeService)]
 UserDep = Annotated[User, Depends(get_current_user)]
+ProducerDep = Annotated[RocketMqProducer, Depends(get_rocketmq_producer)]
 
 
 class KnowledgeBaseCreateBody(BaseModel):
@@ -321,13 +333,17 @@ def process_knowledge_document(
     session: SessionDep,
     knowledge: KnowledgeDep,
     user: UserDep,
+    producer: ProducerDep,
 ) -> ApiResponse[DocumentProcessResultView]:
-    document, run = knowledge.process_document(
+    document, run, event = knowledge.request_process_document(
         session,
         user_id=user.id,
         knowledge_base_id=knowledge_base_id,
         document_id=document_id,
     )
+    session.commit()
+    # 事务提交后，尝试直发 RocketMQ 降低延迟；若失败保持 pending，由后台 Relay 兜底
+    OutboxService.publish_event(session, producer=producer, event=event)
     return ApiResponse.success(
         DocumentProcessResultView(document=_document_view(document), run=_run_view(run))
     )

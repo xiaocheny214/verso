@@ -38,6 +38,7 @@ async def lifespan(_app: FastAPI):
         from verso_app.server.reputation import (
             models as reputation_models,  # noqa: F401
         )
+        from verso_framework.mq import models as mq_models  # noqa: F401
 
         engine = get_engine()
         inspector = inspect(engine)

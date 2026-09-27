@@ -39,7 +39,9 @@ def test_memory_put_get_delete_list() -> None:
 
 def test_build_object_store_requires_kodo_credentials() -> None:
     with pytest.raises(ObjectStoreError):
-        build_object_store(StorageSettings())
+        build_object_store(
+            StorageSettings(_env_file=None, access_key="", secret_key="", bucket="", domain="")
+        )
 
 
 @patch("verso_framework.storage.kodo.put_data")
