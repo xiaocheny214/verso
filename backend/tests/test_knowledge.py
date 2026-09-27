@@ -859,10 +859,16 @@ def test_knowledge_document_process_routes(db: Session) -> None:
         f"/me/knowledge-bases/{base.id}/documents/{doc.id}/process",
     )
     assert processed.json()["code"] == BizCode.SUCCESS
-    assert processed.json()["data"]["document"]["status"] == "success"
-    assert processed.json()["data"]["document"]["chunk_count"] >= 1
-    assert processed.json()["data"]["run"]["status"] == "success"
+    assert processed.json()["data"]["document"]["status"] == "pending"
+    assert processed.json()["data"]["run"]["status"] == "pending"
     assert "text" not in processed.json()["data"]["run"]
+
+    # 模拟 Worker 异步消费该作业
+    run_id = uuid.UUID(processed.json()["data"]["run"]["id"])
+    doc_after, run_after = knowledge.execute_process_document(db, run_id=run_id)
+    assert doc_after.status == "success"
+    assert doc_after.chunk_count >= 1
+    assert run_after.status == "success"
 
     listed = client.get(
         f"/me/knowledge-bases/{base.id}/documents/{doc.id}/process-runs",
@@ -870,6 +876,7 @@ def test_knowledge_document_process_routes(db: Session) -> None:
     assert listed.json()["code"] == BizCode.SUCCESS
     assert len(listed.json()["data"]) == 1
     assert listed.json()["data"][0]["id"] == processed.json()["data"]["run"]["id"]
+    assert listed.json()["data"][0]["status"] == "success"
     app.dependency_overrides.clear()
 
 

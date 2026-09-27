@@ -62,12 +62,19 @@ def test_knowledge_commits_process(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self) -> None:
             self.committed = False
             self.rolled_back = False
+            self.added: list[object] = []
 
         def __enter__(self):
             return self
 
         def __exit__(self, *_args: object) -> bool:
             return False
+
+        def add(self, obj: object) -> None:
+            self.added.append(obj)
+
+        def flush(self) -> None:
+            pass
 
         def commit(self) -> None:
             self.committed = True
@@ -78,30 +85,87 @@ def test_knowledge_commits_process(monkeypatch: pytest.MonkeyPatch) -> None:
     session = _Session()
     calls: list[uuid.UUID] = []
 
-    def process(_self: object, _db: object, *, user_id: uuid.UUID, **_kwargs: object) -> None:
-        calls.append(user_id)
+    def execute(_self: object, _db: object, *, run_id: uuid.UUID) -> tuple[object, object]:
+        calls.append(run_id)
+        return (object(), object())
 
     monkeypatch.setattr(
         "verso_app.worker.jobs.knowledge.get_session_factory",
         lambda: lambda: session,
     )
     monkeypatch.setattr(
-        "verso_app.worker.jobs.knowledge.KnowledgeService.process_document",
-        process,
+        "verso_app.worker.jobs.knowledge.KnowledgeService.execute_process_document",
+        execute,
     )
     user_id = uuid.uuid4()
+    run_id = uuid.uuid4()
     consume_knowledge_process(
         new_knowledge_process_event(
             Snowflake(1),
             user_id=str(user_id),
             knowledge_base_id=str(uuid.uuid4()),
             document_id=str(uuid.uuid4()),
+            run_id=str(run_id),
+        )
+    )
+    assert calls == [run_id]
+    assert session.committed is True
+    assert session.rolled_back is False
+
+
+def test_knowledge_idempotent_duplicate_event_skips(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    class _Session:
+        def __init__(self) -> None:
+            self.rolled_back = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> bool:
+            return False
+
+        def add(self, _obj: object) -> None:
+            pass
+
+        def flush(self) -> None:
+            raise IntegrityError("unique constraint violated", params=None, orig=Exception())
+
+        def commit(self) -> None:
+            pass
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    session = _Session()
+    executed = False
+
+    def execute(_self: object, _db: object, *, run_id: uuid.UUID) -> tuple[object, object]:
+        nonlocal executed
+        executed = True
+        return (object(), object())
+
+    monkeypatch.setattr(
+        "verso_app.worker.jobs.knowledge.get_session_factory",
+        lambda: lambda: session,
+    )
+    monkeypatch.setattr(
+        "verso_app.worker.jobs.knowledge.KnowledgeService.execute_process_document",
+        execute,
+    )
+
+    consume_knowledge_process(
+        new_knowledge_process_event(
+            Snowflake(1),
+            user_id=str(uuid.uuid4()),
+            knowledge_base_id=str(uuid.uuid4()),
+            document_id=str(uuid.uuid4()),
             run_id=str(uuid.uuid4()),
         )
     )
-    assert calls == [user_id]
-    assert session.committed is True
-    assert session.rolled_back is False
+    assert executed is False
+    assert session.rolled_back is True
 
 
 def test_unknown_event_is_rejected() -> None:

@@ -35,13 +35,20 @@ from verso_common.enums import (
     ProcessRunStatus,
 )
 from verso_common.exceptions import BizException
+from verso_common.ids import Snowflake
 from verso_framework.config import get_app_settings
 from verso_framework.embed import Embedder, build_embedder
+from verso_framework.mq import (
+    DeliveryEvent,
+    OutboxService,
+    new_knowledge_process_event,
+)
 from verso_framework.storage import ObjectStore, ObjectStoreError, get_object_store
 
 _COLLECTION_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
 _PROCESS_MODES = frozenset({"chunk", "none"})
 _ERROR_MESSAGE_MAX = 2000
+_default_snowflake = Snowflake(1)
 
 
 class KnowledgeService:
@@ -52,6 +59,7 @@ class KnowledgeService:
         self._chunker = ChunkService()
         self._embedder: Embedder | None = None
         self._vectors: ChunkVectorStore | None = None
+        self._snowflake: Snowflake | None = None
 
     @classmethod
     def with_deps(
@@ -61,8 +69,10 @@ class KnowledgeService:
         chunker: ChunkService | None = None,
         embedder: Embedder | None = None,
         vectors: ChunkVectorStore | None = None,
+        snowflake: Snowflake | None = None,
     ) -> KnowledgeService:
         service = cls()
+        service._snowflake = snowflake
         service._store = store
         if chunker is not None:
             service._chunker = chunker
@@ -372,14 +382,15 @@ class KnowledgeService:
         text = self._load_document_text(row)
         return row, self._chunker.split(text, params)
 
-    def process_document(
+    def request_process_document(
         self,
         db: Session,
         *,
         user_id: uuid.UUID,
         knowledge_base_id: uuid.UUID,
         document_id: uuid.UUID,
-    ) -> tuple[KnowledgeDocument, DocumentProcessRun]:
+    ) -> tuple[KnowledgeDocument, DocumentProcessRun, DeliveryEvent]:
+        """HTTP 请求端：防重入校验，创建 PENDING 状态的 run，记录 outbox 事件。"""
         row = self.get_document(
             db,
             user_id=user_id,
@@ -388,24 +399,76 @@ class KnowledgeService:
         )
         self._normalize_legacy_strategy(db, row)
 
-        started = datetime.now(UTC)
-        started_mono = time.perf_counter()
+        # 校验是否有未完结的 run（pending 或 running）
+        active_run = db.scalar(
+            select(DocumentProcessRun).where(
+                DocumentProcessRun.document_id == row.id,
+                DocumentProcessRun.status.in_([ProcessRunStatus.PENDING, ProcessRunStatus.RUNNING]),
+            )
+        )
+        if active_run is not None:
+            raise BizException("文档正在处理中，请勿重复提交", code=BizCode.CONFLICT)
+
         run = DocumentProcessRun(
             user_id=user_id,
             knowledge_base_id=knowledge_base_id,
             document_id=row.id,
-            status=ProcessRunStatus.RUNNING,
+            status=ProcessRunStatus.PENDING,
             process_mode=row.process_mode,
             chunk_strategy=row.chunk_strategy,
             chunk_size=row.chunk_size,
             overlap=row.overlap,
-            started_at=started,
+            started_at=None,
         )
         db.add(run)
+        row.status = DocumentStatus.PENDING
+        row.error_class = None
+        db.flush()
+
+        event = new_knowledge_process_event(
+            self._snowflake or _default_snowflake,
+            user_id=str(user_id),
+            knowledge_base_id=str(knowledge_base_id),
+            document_id=str(row.id),
+            run_id=str(run.id),
+        )
+        OutboxService.save_event(db, event)
+        db.flush()
+        return row, run, event
+
+    def execute_process_document(
+        self,
+        db: Session,
+        *,
+        run_id: uuid.UUID,
+    ) -> tuple[KnowledgeDocument, DocumentProcessRun]:
+        """Worker 消费端：将 run 从 pending 置为 running，执行切块、Embedding 与 Milvus 写入。"""
+        run = db.scalar(select(DocumentProcessRun).where(DocumentProcessRun.id == run_id))
+        if run is None:
+            raise BizException("处理记录不存在", code=BizCode.NOT_FOUND)
+        if run.status != ProcessRunStatus.PENDING:
+            row = db.get(KnowledgeDocument, run.document_id)
+            if row is None:
+                raise BizException("文档不存在", code=BizCode.NOT_FOUND)
+            return row, run
+
+        row = db.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.id == run.document_id,
+                KnowledgeDocument.knowledge_base_id == run.knowledge_base_id,
+            )
+        )
+        if row is None:
+            raise BizException("文档不存在", code=BizCode.NOT_FOUND)
+
+        started = datetime.now(UTC)
+        started_mono = time.perf_counter()
+        run.status = ProcessRunStatus.RUNNING
+        run.started_at = started
         db.flush()
 
         try:
-            chunk_count = self._run_process_pipeline(db, user_id=user_id, row=row)
+            chunk_count = self._run_process_pipeline(db, user_id=run.user_id, row=row)
         except BizException as exc:
             self._fail_process(db, row=row, run=run, started_mono=started_mono, exc=exc)
             raise
@@ -425,6 +488,23 @@ class KnowledgeService:
         row.error_class = None
         db.flush()
         return row, run
+
+    def process_document(
+        self,
+        db: Session,
+        *,
+        user_id: uuid.UUID,
+        knowledge_base_id: uuid.UUID,
+        document_id: uuid.UUID,
+    ) -> tuple[KnowledgeDocument, DocumentProcessRun]:
+        """端到端编排辅助方法：先请求受理生成 pending run 与 outbox，再执行实际流水线。"""
+        _doc, run, _event = self.request_process_document(
+            db,
+            user_id=user_id,
+            knowledge_base_id=knowledge_base_id,
+            document_id=document_id,
+        )
+        return self.execute_process_document(db, run_id=run.id)
 
     def list_process_runs(
         self,
