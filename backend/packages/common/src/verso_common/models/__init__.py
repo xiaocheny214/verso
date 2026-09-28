@@ -195,3 +195,43 @@ class ReputationView(BaseModel):
     min_active_score: int = REPUTATION_MIN_ACTIVE_SCORE
     eligibility: Eligibility = Eligibility.ACTIVE
     suspended_until: datetime | None = None
+
+
+class IntentNodeView(BaseModel):
+    id: str
+    parent_id: str | None = None
+    identifier: str
+    name: str
+    layer: str
+    kind: str
+    knowledge_base_id: str | None = None
+    description: str
+    examples: str
+    prompt_template: str | None = None
+    topic_k: int | None = None
+    sort: int
+    enabled: bool
+
+
+class IntentTreeView(BaseModel):
+    id: str
+    parent_id: str | None = None
+    identifier: str
+    name: str
+    layer: str
+    kind: str
+    knowledge_base_id: str | None = None
+    description: str
+    examples: str
+    prompt_template: str | None = None
+    topic_k: int | None = None
+    sort: int
+    enabled: bool
+    children: list["IntentTreeView"] = Field(default_factory=list)
+
+
+IntentTreeView.model_rebuild()
+
+
+class IntentForestView(BaseModel):
+    items: list[IntentTreeView] = Field(default_factory=list)

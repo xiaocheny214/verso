@@ -6,6 +6,7 @@ from verso_common.enums.biz_code import BizCode
 from verso_common.enums.chunk import ChunkStrategy
 from verso_common.enums.document import DocumentStatus, ProcessRunStatus
 from verso_common.enums.exchange import ExchangeStatus
+from verso_common.enums.intent import IntentKind, IntentLayer
 from verso_common.enums.match import MatchConditionStatus, MatchEvaluationOutcome
 from verso_common.enums.model import ModelErrorType
 from verso_common.enums.portrait import PortraitHorizon, PortraitSource, StrengthTag
@@ -20,6 +21,8 @@ __all__ = [
     "DocumentStatus",
     "Eligibility",
     "ExchangeStatus",
+    "IntentKind",
+    "IntentLayer",
     "MatchConditionStatus",
     "MatchEvaluationOutcome",
     "ModelErrorType",

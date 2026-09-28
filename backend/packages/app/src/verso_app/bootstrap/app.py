@@ -10,6 +10,7 @@ from verso_app.web.api import (
     auth_router,
     collect_router,
     exchange_router,
+    intent_router,
     knowledge_router,
     match_router,
     portrait_router,
@@ -31,6 +32,7 @@ async def lifespan(_app: FastAPI):
         from verso_app.server.auth import models as auth_models  # noqa: F401
         from verso_app.server.collect import models as collect_models  # noqa: F401
         from verso_app.server.exchange import models as exchange_models  # noqa: F401
+        from verso_app.server.intent import models as intent_models  # noqa: F401
         from verso_app.server.knowledge import models as knowledge_models  # noqa: F401
         from verso_app.server.match import models as match_models  # noqa: F401
         from verso_app.server.portrait import models as portrait_models  # noqa: F401
@@ -76,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(portrait_router)
     app.include_router(collect_router)
     app.include_router(knowledge_router)
+    app.include_router(intent_router)
     app.include_router(match_router)
     app.include_router(exchange_router)
     app.include_router(quality_router)
