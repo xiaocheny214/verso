@@ -283,6 +283,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/intent-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Intent Node */
+        post: operations["create_intent_node_me_intent_nodes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/intent-nodes/{node_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Intent Node */
+        get: operations["get_intent_node_me_intent_nodes__node_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Intent Node */
+        delete: operations["delete_intent_node_me_intent_nodes__node_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Intent Node */
+        patch: operations["patch_intent_node_me_intent_nodes__node_id__patch"];
+        trace?: never;
+    };
+    "/me/intent-trees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Intent Trees
+         * @description 返回服务端装配好的意图森林，兄弟节点按 sort、id 排序。
+         */
+        get: operations["list_intent_trees_me_intent_trees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/knowledge-bases": {
         parameters: {
             query?: never;
@@ -745,6 +801,143 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IntentForestView */
+        IntentForestView: {
+            /** Items */
+            items?: components["schemas"]["IntentTreeView"][];
+        };
+        /** IntentNodeCreateBody */
+        IntentNodeCreateBody: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Examples
+             * @default
+             */
+            examples: string;
+            /** Identifier */
+            identifier: string;
+            /**
+             * Kind
+             * @default kb_retrieve
+             */
+            kind: string;
+            /** Knowledge Base Id */
+            knowledge_base_id?: string | null;
+            /**
+             * Layer
+             * @default other
+             */
+            layer: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Prompt Template */
+            prompt_template?: string | null;
+            /**
+             * Sort
+             * @default 0
+             */
+            sort: number;
+            /** Topic K */
+            topic_k?: number | null;
+        };
+        /** IntentNodePatchBody */
+        IntentNodePatchBody: {
+            /** Description */
+            description?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Examples */
+            examples?: string | null;
+            /** Identifier */
+            identifier?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Knowledge Base Id */
+            knowledge_base_id?: string | null;
+            /** Layer */
+            layer?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Prompt Template */
+            prompt_template?: string | null;
+            /** Sort */
+            sort?: number | null;
+            /** Topic K */
+            topic_k?: number | null;
+        };
+        /** IntentNodeView */
+        IntentNodeView: {
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Examples */
+            examples: string;
+            /** Id */
+            id: string;
+            /** Identifier */
+            identifier: string;
+            /** Kind */
+            kind: string;
+            /** Knowledge Base Id */
+            knowledge_base_id?: string | null;
+            /** Layer */
+            layer: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Prompt Template */
+            prompt_template?: string | null;
+            /** Sort */
+            sort: number;
+            /** Topic K */
+            topic_k?: number | null;
+        };
+        /** IntentTreeView */
+        IntentTreeView: {
+            /** Children */
+            children?: components["schemas"]["IntentTreeView"][];
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Examples */
+            examples: string;
+            /** Id */
+            id: string;
+            /** Identifier */
+            identifier: string;
+            /** Kind */
+            kind: string;
+            /** Knowledge Base Id */
+            knowledge_base_id?: string | null;
+            /** Layer */
+            layer: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Prompt Template */
+            prompt_template?: string | null;
+            /** Sort */
+            sort: number;
+            /** Topic K */
+            topic_k?: number | null;
+        };
         /** KnowledgeBaseCreateBody */
         KnowledgeBaseCreateBody: {
             /** Collection Name */
@@ -1169,6 +1362,50 @@ export interface components {
             code: number;
             /** @description 业务数据 */
             data?: components["schemas"]["FailedFetchListView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
+        /** Response[IntentForestView] */
+        Response_IntentForestView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["IntentForestView"] | null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
+        /** Response[IntentNodeView] */
+        Response_IntentNodeView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["IntentNodeView"] | null;
             /**
              * Message
              * @description 提示信息
@@ -1969,6 +2206,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_intent_node_me_intent_nodes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentNodeCreateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_IntentNodeView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intent_node_me_intent_nodes__node_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_IntentNodeView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_intent_node_me_intent_nodes__node_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_intent_node_me_intent_nodes__node_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentNodePatchBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_IntentNodeView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_intent_trees_me_intent_trees_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_IntentForestView_"];
                 };
             };
         };

@@ -194,6 +194,24 @@ class KnowledgeService:
         )
         if count:
             raise BizException("知识库仍有文档，无法删除", code=BizCode.CONFLICT)
+
+        # 检查是否仍有处于 enabled 状态的意图节点指向该知识库，避免产生悬空意图
+        from verso_app.server.intent.models import IntentNode
+
+        referenced_by_intent = db.scalar(
+            select(IntentNode.id)
+            .where(
+                IntentNode.knowledge_base_id == row.id,
+                IntentNode.enabled.is_(True),
+            )
+            .limit(1)
+        )
+        if referenced_by_intent is not None:
+            raise BizException(
+                "知识库仍有启用的意图节点引用，请先禁用或删除相关意图节点",
+                code=BizCode.CONFLICT,
+            )
+
         db.delete(row)
         db.flush()
 
