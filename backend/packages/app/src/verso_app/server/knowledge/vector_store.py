@@ -24,16 +24,6 @@ _FORBIDDEN_METADATA_KEYS = frozenset({"text", "content", "embedding_text", "body
 
 
 @dataclass(frozen=True, slots=True)
-class ChunkSearchResult:
-    user_id: uuid.UUID
-    knowledge_base_id: uuid.UUID
-    document_id: uuid.UUID
-    chunk_index: int
-    score: float
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True)
 class ChunkVectorPoint:
     """一条可 upsert 的块向量（无 text）。"""
 
@@ -72,16 +62,6 @@ class ChunkVectorStore(Protocol):
 
     def list_document_ids(self, *, user_id: uuid.UUID, document_id: uuid.UUID) -> list[str]:
         """测试/观测用：列出该文档已写入的点 id。"""
-
-    def search_chunks(
-        self,
-        *,
-        query_embedding: list[float],
-        user_ids: set[uuid.UUID],
-        top_k: int = 20,
-        min_score: float = 0.2,
-    ) -> list[ChunkSearchResult]:
-        """在候选用户集合 user_ids 的文档切片中进行相似度检索。"""
 
 
 class MemoryChunkVectorStore:
@@ -124,47 +104,6 @@ class MemoryChunkVectorStore:
             for k, point in self._points.items()
             if k.startswith(prefix) and point.user_id == user_id
         )
-
-    def search_chunks(
-        self,
-        *,
-        query_embedding: list[float],
-        user_ids: set[uuid.UUID],
-        top_k: int = 20,
-        min_score: float = 0.2,
-    ) -> list[ChunkSearchResult]:
-        if not user_ids or not self._points:
-            return []
-
-        import math
-
-        def _cosine_similarity(v1: list[float], v2: list[float]) -> float:
-            dot = sum(a * b for a, b in zip(v1, v2, strict=False))
-            norm1 = math.sqrt(sum(a * a for a in v1))
-            norm2 = math.sqrt(sum(b * b for b in v2))
-            if norm1 <= 0 or norm2 <= 0:
-                return 0.0
-            return dot / (norm1 * norm2)
-
-        matched: list[ChunkSearchResult] = []
-        for point in self._points.values():
-            if point.user_id not in user_ids:
-                continue
-            sim = _cosine_similarity(query_embedding, point.embedding)
-            if sim >= min_score:
-                matched.append(
-                    ChunkSearchResult(
-                        user_id=point.user_id,
-                        knowledge_base_id=point.knowledge_base_id,
-                        document_id=point.document_id,
-                        chunk_index=point.chunk_index,
-                        score=sim,
-                        metadata=dict(point.metadata),
-                    )
-                )
-
-        matched.sort(key=lambda item: -item.score)
-        return matched[:top_k]
 
 
 class MilvusChunkVectorStore:
@@ -284,56 +223,3 @@ class MilvusChunkVectorStore:
             output_fields=["id"],
         )
         return sorted(str(row["id"]) for row in rows)
-
-    def search_chunks(
-        self,
-        *,
-        query_embedding: list[float],
-        user_ids: set[uuid.UUID],
-        top_k: int = 20,
-        min_score: float = 0.2,
-    ) -> list[ChunkSearchResult]:
-        if not user_ids:
-            return []
-        client, name, _partitions = self._resolved()
-        if not client.has_collection(collection_name=name):
-            return []
-
-        user_ids_str = ", ".join(f'"{uid}"' for uid in user_ids)
-        filter_expr = f"user_id in [{user_ids_str}]"
-
-        results = client.search(
-            collection_name=name,
-            data=[query_embedding],
-            limit=top_k,
-            filter=filter_expr,
-            output_fields=[
-                "user_id",
-                "knowledge_base_id",
-                "document_id",
-                "chunk_index",
-                "metadata",
-            ],
-            search_params={"metric_type": "COSINE"},
-        )
-
-        hits: list[ChunkSearchResult] = []
-        if not results or not results[0]:
-            return []
-
-        for hit in results[0]:
-            score = float(hit.get("distance", 0.0))
-            if score < min_score:
-                continue
-            entity = hit.get("entity", {})
-            hits.append(
-                ChunkSearchResult(
-                    user_id=uuid.UUID(entity["user_id"]),
-                    knowledge_base_id=uuid.UUID(entity["knowledge_base_id"]),
-                    document_id=uuid.UUID(entity["document_id"]),
-                    chunk_index=int(entity["chunk_index"]),
-                    score=score,
-                    metadata=entity.get("metadata", {}),
-                )
-            )
-        return hits

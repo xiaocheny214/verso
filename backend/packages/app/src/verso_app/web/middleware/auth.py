@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -13,7 +12,6 @@ from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.collect.service import CollectService
 from verso_app.server.exchange.service import ExchangeService
-from verso_app.server.knowledge.vector_store import MilvusChunkVectorStore
 from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.extractor import build_evidence_classifier
@@ -24,7 +22,6 @@ from verso_app.server.quality.service import QualityService
 from verso_app.server.reputation.service import ReputationService
 from verso_framework.config import get_app_settings
 from verso_framework.db import get_redis, get_session
-from verso_framework.embed import build_embedder
 from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClient
 
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -70,17 +67,11 @@ PortraitDep = Annotated[PortraitService, Depends(get_portrait_service)]
 
 def get_match_service(session: SessionDep) -> MatchService:
     settings = get_app_settings()
-    embedder = None
-    with contextlib.suppress(Exception):
-        embedder = build_embedder(settings)
     return MatchService(
         session=session,
         exchange=ExchangeService(session),
         reputation=ReputationService(settings=settings),
         compatibility=build_pair_compatibility_evaluator(settings),
-        embedder=embedder,
-        vector_store=MilvusChunkVectorStore(),
-        settings=settings,
     )
 
 

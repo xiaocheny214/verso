@@ -13,7 +13,6 @@ from sqlalchemy import (
     String,
     Text,
     TypeDecorator,
-    UniqueConstraint,
     Uuid,
     func,
     text,
@@ -51,7 +50,6 @@ class MatchCondition(Base):
     pair_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     waiting_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     pair_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    question_embedding: Mapped[list[float] | None] = mapped_column(JSONType, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -100,37 +98,6 @@ class MatchEvaluation(Base):
     label: Mapped[str | None] = mapped_column(String(16), nullable=True)
     label_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     labeled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-
-class MatchCandidate(Base):
-    """服务端内部单向 RAG 候选表：question_id -> helper_id。
-
-    仅对等待中的条件有效，条件离开 waiting 态（MATCHED / CANCELLED / 过期）时自动删除。
-    """
-
-    __tablename__ = "match_candidates"
-    __table_args__ = (
-        UniqueConstraint("question_id", "helper_id", name="match_candidates_question_helper"),
-        Index("idx_match_candidates_question_id", "question_id"),
-        Index("idx_match_candidates_helper_id", "helper_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    question_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("match_conditions.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    helper_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    score: Mapped[float] = mapped_column(nullable=False)
-    evidence: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
