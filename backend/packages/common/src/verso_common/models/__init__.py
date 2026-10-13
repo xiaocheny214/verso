@@ -235,3 +235,16 @@ IntentTreeView.model_rebuild()
 
 class IntentForestView(BaseModel):
     items: list[IntentTreeView] = Field(default_factory=list)
+
+
+class QueryTermMappingView(BaseModel):
+    id: str
+    user_id: str
+    source_term: str
+    target_term: str
+    match_type: int
+    priority: int
+    enabled: bool
+    remark: str | None = None
+    created_at: datetime
+    updated_at: datetime
