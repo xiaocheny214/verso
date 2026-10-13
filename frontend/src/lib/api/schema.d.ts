@@ -602,6 +602,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/term-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Term Mappings */
+        get: operations["list_term_mappings_me_term_mappings_get"];
+        put?: never;
+        /** Create Term Mapping */
+        post: operations["create_term_mapping_me_term_mappings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/term-mappings/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Term Mapping */
+        get: operations["get_term_mapping_me_term_mappings__mapping_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Term Mapping */
+        delete: operations["delete_term_mapping_me_term_mappings__mapping_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Term Mapping */
+        patch: operations["patch_term_mapping_me_term_mappings__mapping_id__patch"];
+        trace?: never;
+    };
     "/reviews": {
         parameters: {
             query?: never;
@@ -1109,6 +1146,49 @@ export interface components {
              */
             total: number;
         };
+        /** ListResponse[QueryTermMappingView] */
+        ListResponse_QueryTermMappingView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /**
+             * Data
+             * @description 业务数据列表
+             */
+            data?: components["schemas"]["QueryTermMappingView"][];
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Page
+             * @description 当前页码,从 1 开始
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @description 每页条数;0 表示不分页
+             * @default 0
+             */
+            page_size: number;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+            /**
+             * Total
+             * @description 数据总数
+             * @default 0
+             */
+            total: number;
+        };
         /**
          * MatchConditionStatus
          * @enum {string}
@@ -1197,6 +1277,74 @@ export interface components {
             horizon: components["schemas"]["PortraitHorizon"];
             /** Strengths */
             strengths?: components["schemas"]["Strength"][];
+        };
+        /** QueryTermMappingCreateBody */
+        QueryTermMappingCreateBody: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Match Type
+             * @default 1
+             */
+            match_type: number;
+            /**
+             * Priority
+             * @default 0
+             */
+            priority: number;
+            /** Remark */
+            remark?: string | null;
+            /** Source Term */
+            source_term: string;
+            /** Target Term */
+            target_term: string;
+        };
+        /** QueryTermMappingPatchBody */
+        QueryTermMappingPatchBody: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Match Type */
+            match_type?: number | null;
+            /** Priority */
+            priority?: number | null;
+            /** Remark */
+            remark?: string | null;
+            /** Source Term */
+            source_term?: string | null;
+            /** Target Term */
+            target_term?: string | null;
+        };
+        /** QueryTermMappingView */
+        QueryTermMappingView: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Match Type */
+            match_type: number;
+            /** Priority */
+            priority: number;
+            /** Remark */
+            remark?: string | null;
+            /** Source Term */
+            source_term: string;
+            /** Target Term */
+            target_term: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** User Id */
+            user_id: string;
         };
         /** ReputationView */
         ReputationView: {
@@ -1519,6 +1667,28 @@ export interface components {
              * @description 业务数据
              */
             data?: null;
+            /**
+             * Message
+             * @description 提示信息
+             * @default success
+             */
+            message: string;
+            /**
+             * Timestamp
+             * @description 响应时间;默认不携带,不携带时省略
+             */
+            timestamp?: string | null;
+        };
+        /** Response[QueryTermMappingView] */
+        Response_QueryTermMappingView_: {
+            /**
+             * Code
+             * @description 业务状态码:成功 200,失败非 200
+             * @default 200
+             */
+            code: number;
+            /** @description 业务数据 */
+            data?: components["schemas"]["QueryTermMappingView"] | null;
             /**
              * Message
              * @description 提示信息
@@ -2973,6 +3143,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Response_ReputationView_"];
+                };
+            };
+        };
+    };
+    list_term_mappings_me_term_mappings_get: {
+        parameters: {
+            query?: {
+                keyword?: string | null;
+                enabled?: boolean | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListResponse_QueryTermMappingView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_term_mapping_me_term_mappings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryTermMappingCreateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_QueryTermMappingView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_term_mapping_me_term_mappings__mapping_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mapping_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_QueryTermMappingView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_term_mapping_me_term_mappings__mapping_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mapping_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_term_mapping_me_term_mappings__mapping_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mapping_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryTermMappingPatchBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response_QueryTermMappingView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
