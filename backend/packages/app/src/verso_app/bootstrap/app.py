@@ -16,6 +16,7 @@ from verso_app.web.api import (
     portrait_router,
     quality_router,
     reputation_router,
+    term_mapping_router,
 )
 from verso_app.web.handler import register_exception_handlers
 from verso_app.worker.handlers import schedule_portrait_sync_poller
@@ -39,6 +40,9 @@ async def lifespan(_app: FastAPI):
         from verso_app.server.quality import models as quality_models  # noqa: F401
         from verso_app.server.reputation import (
             models as reputation_models,  # noqa: F401
+        )
+        from verso_app.server.retrieve.term_mapping import (
+            models as term_mapping_models,  # noqa: F401
         )
         from verso_framework.mq import models as mq_models  # noqa: F401
 
@@ -83,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(exchange_router)
     app.include_router(quality_router)
     app.include_router(reputation_router)
+    app.include_router(term_mapping_router)
 
     @app.get("/health", include_in_schema=False)
     def health() -> Response[dict[str, str]]:

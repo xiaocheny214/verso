@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -20,6 +21,7 @@ from verso_app.server.portrait.service import PortraitService
 from verso_app.server.quality.judge import build_judge
 from verso_app.server.quality.service import QualityService
 from verso_app.server.reputation.service import ReputationService
+from verso_app.server.retrieve.term_mapping.service import QueryTermMappingService
 from verso_framework.config import get_app_settings
 from verso_framework.db import get_redis, get_session
 from verso_framework.providers.zhihu import HttpxOAuthClient, HttpxUserDataClient
@@ -87,6 +89,13 @@ def get_quality_service(session: SessionDep) -> QualityService:
         reputation=ReputationService(settings=settings),
         judge=build_judge(settings),
     )
+
+
+def get_term_mapping_service(session: SessionDep) -> QueryTermMappingService:
+    redis_client = None
+    with contextlib.suppress(Exception):
+        redis_client = get_redis()
+    return QueryTermMappingService(session=session, redis=redis_client)
 
 
 def get_current_user(request: Request, auth: AuthDep) -> User:

@@ -9,6 +9,7 @@ from verso_app.web.api.match import router as match_router
 from verso_app.web.api.portrait import router as portrait_router
 from verso_app.web.api.quality import router as quality_router
 from verso_app.web.api.reputation import router as reputation_router
+from verso_app.web.api.term_mapping import router as term_mapping_router
 
 __all__ = [
     "auth_router",
@@ -20,4 +21,5 @@ __all__ = [
     "portrait_router",
     "quality_router",
     "reputation_router",
+    "term_mapping_router",
 ]

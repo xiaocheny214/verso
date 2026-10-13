@@ -1383,6 +1383,65 @@
         "title": "ListResponse[PairView]",
         "type": "object"
       },
+      "ListResponse_QueryTermMappingView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "description": "业务数据列表",
+            "items": {
+              "$ref": "#/components/schemas/QueryTermMappingView"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "page": {
+            "default": 1,
+            "description": "当前页码,从 1 开始",
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 0,
+            "description": "每页条数;0 表示不分页",
+            "minimum": 0.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          },
+          "total": {
+            "default": 0,
+            "description": "数据总数",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "ListResponse[QueryTermMappingView]",
+        "type": "object"
+      },
       "MatchConditionStatus": {
         "enum": [
           "waiting",
@@ -1630,6 +1689,196 @@
           "horizon"
         ],
         "title": "PortraitView",
+        "type": "object"
+      },
+      "QueryTermMappingCreateBody": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "match_type": {
+            "default": 1,
+            "title": "Match Type",
+            "type": "integer"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "source_term": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Source Term",
+            "type": "string"
+          },
+          "target_term": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Target Term",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_term",
+          "target_term"
+        ],
+        "title": "QueryTermMappingCreateBody",
+        "type": "object"
+      },
+      "QueryTermMappingPatchBody": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "match_type": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Type"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "source_term": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Term"
+          },
+          "target_term": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Term"
+          }
+        },
+        "title": "QueryTermMappingPatchBody",
+        "type": "object"
+      },
+      "QueryTermMappingView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "match_type": {
+            "title": "Match Type",
+            "type": "integer"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "source_term": {
+            "title": "Source Term",
+            "type": "string"
+          },
+          "target_term": {
+            "title": "Target Term",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "source_term",
+          "target_term",
+          "match_type",
+          "priority",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "QueryTermMappingView",
         "type": "object"
       },
       "ReputationView": {
@@ -2249,6 +2498,48 @@
           }
         },
         "title": "Response[NoneType]",
+        "type": "object"
+      },
+      "Response_QueryTermMappingView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "业务状态码:成功 200,失败非 200",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueryTermMappingView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务数据"
+          },
+          "message": {
+            "default": "success",
+            "description": "提示信息",
+            "title": "Message",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应时间;默认不携带,不携带时省略",
+            "title": "Timestamp"
+          }
+        },
+        "title": "Response[QueryTermMappingView]",
         "type": "object"
       },
       "Response_ReputationView_": {
@@ -4455,6 +4746,268 @@
         "summary": "Me Reputation",
         "tags": [
           "reputation"
+        ]
+      }
+    },
+    "/me/term-mappings": {
+      "get": {
+        "operationId": "list_term_mappings_me_term_mappings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enabled"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_QueryTermMappingView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Term Mappings",
+        "tags": [
+          "term_mapping"
+        ]
+      },
+      "post": {
+        "operationId": "create_term_mapping_me_term_mappings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryTermMappingCreateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_QueryTermMappingView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Term Mapping",
+        "tags": [
+          "term_mapping"
+        ]
+      }
+    },
+    "/me/term-mappings/{mapping_id}": {
+      "delete": {
+        "operationId": "delete_term_mapping_me_term_mappings__mapping_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Term Mapping",
+        "tags": [
+          "term_mapping"
+        ]
+      },
+      "get": {
+        "operationId": "get_term_mapping_me_term_mappings__mapping_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_QueryTermMappingView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Term Mapping",
+        "tags": [
+          "term_mapping"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_term_mapping_me_term_mappings__mapping_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryTermMappingPatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response_QueryTermMappingView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Term Mapping",
+        "tags": [
+          "term_mapping"
         ]
       }
     },
