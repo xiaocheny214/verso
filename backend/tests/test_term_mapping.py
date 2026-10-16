@@ -22,7 +22,7 @@ from sqlalchemy.pool import StaticPool
 
 from verso_app.bootstrap.app import create_app
 from verso_app.server.auth.models import User
-from verso_app.server.retrieve.term_mapping.service import (
+from verso_app.server.term_mapping.service import (
     CACHE_KEY_PREFIX,
     EMPTY_CACHE_SENTINEL,
     QueryTermMappingService,

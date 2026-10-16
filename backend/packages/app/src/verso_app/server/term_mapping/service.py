@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from verso_app.server.retrieve.term_mapping.models import QueryTermMapping
+from verso_app.server.term_mapping.models import QueryTermMapping
 from verso_common.enums import BizCode
 from verso_common.exceptions import BizException
 
