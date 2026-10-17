@@ -22,7 +22,7 @@ from sqlalchemy.pool import StaticPool
 
 from verso_app.bootstrap.app import create_app
 from verso_app.server.auth.models import User
-from verso_app.server.retrieve.term_mapping.service import (
+from verso_app.server.term_mapping.service import (
     CACHE_KEY_PREFIX,
     EMPTY_CACHE_SENTINEL,
     QueryTermMappingService,
@@ -197,6 +197,19 @@ def test_disabled_term_not_normalized(db: Session) -> None:
 
     text = "RAG 技术在 AI 领域的应用"
     assert service.normalize(text, user_id=user.id) == text
+
+
+def test_non_contains_match_type_is_skipped(db: Session) -> None:
+    user = _user(db, "u1")
+    service = QueryTermMappingService(db)
+    service.create(
+        user_id=user.id,
+        source_term="kodo",
+        target_term="对象存储",
+        match_type=2,
+    )
+
+    assert service.normalize("kodo如何配置", user_id=user.id) == "kodo如何配置"
 
 
 def test_redis_cache_and_invalidation(db: Session) -> None:

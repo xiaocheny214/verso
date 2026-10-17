@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from verso_app.server.retrieve.term_mapping.models import QueryTermMapping
+from verso_app.server.term_mapping.models import QueryTermMapping
 from verso_common.enums import BizCode
 from verso_common.exceptions import BizException
 
@@ -232,12 +232,13 @@ class QueryTermMappingService:
             except Exception as exc:
                 logger.warning("读取 Redis 术语映射缓存失败 user_id=%s: %s", user_id, exc)
 
-        # 查 DB：仅加载 enabled=True 的规则
+        # 查 DB：只加载启用的包含匹配。match_type 非 1 的规则留给后续匹配方式。
         stmt = (
             select(QueryTermMapping.source_term, QueryTermMapping.target_term)
             .where(
                 QueryTermMapping.user_id == user_id,
                 QueryTermMapping.enabled.is_(True),
+                QueryTermMapping.match_type == 1,
             )
             .order_by(
                 QueryTermMapping.priority.desc(),
@@ -281,7 +282,10 @@ class QueryTermMappingService:
         for item in mappings:
             src = item.get("source_term", "")
             tgt = item.get("target_term", "")
-            if src and src in normalized:
-                normalized = normalized.replace(src, tgt)
+            if not src or not tgt or src not in normalized:
+                continue
+            normalized = normalized.replace(src, tgt)
 
+        if normalized != text:
+            logger.info("查询归一化：original=%s normalized=%s", text, normalized)
         return normalized

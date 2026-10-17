@@ -10,6 +10,7 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from verso_common.constants import (
+    QUERY_REWRITE_AND_SPLIT_PROMPT_PATH,
     REPUTATION_GOOD_DELTA,
     REPUTATION_INITIAL_SCORE,
     REPUTATION_MIN_ACTIVE_SCORE,
@@ -41,6 +42,10 @@ class AppSettings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = ""
     llm_embedding_model: str = ""
+    # 查询改写总开关。关闭时跳过大模型，把当前问题写回上下文。
+    query_rewrite_enabled: bool = True
+    # 查询改写系统提示词路径。默认指向 llm_pipeline 包内的模板。
+    query_rewrite_prompt_path: str = QUERY_REWRITE_AND_SPLIT_PROMPT_PATH
     # 全站向量维度；None = 用模型默认输出维。process / retrieve / Milvus 必须同一值。
     llm_embedding_dimensions: int | None = None
     match_retrieval_top_k: int = RETRIEVAL_TOP_K

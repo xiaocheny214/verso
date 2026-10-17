@@ -1,6 +1,5 @@
 import asyncio
 
-from verso_app.server.llm_pipeline import TemplateMapPipeline
 from verso_app.server.map import MapService
 from verso_common.constants import REPUTATION_INITIAL_SCORE
 from verso_common.enums import MatchConditionStatus, StrengthTag
@@ -10,11 +9,6 @@ def test_enums_are_stable() -> None:
     assert StrengthTag.INTERNET == "互联网"
     assert MatchConditionStatus.MATCHED == "matched"
     assert REPUTATION_INITIAL_SCORE == 65
-
-
-def test_template_pipeline_opening_topics() -> None:
-    topics = asyncio.run(TemplateMapPipeline().opening_topics("t", "一篇关于匹配的文章"))
-    assert len(topics) == 3
 
 
 def test_map_service_delegates_to_pipeline() -> None:

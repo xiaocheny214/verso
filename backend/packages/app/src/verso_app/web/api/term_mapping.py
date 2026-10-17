@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from verso_app.server.auth.models import User
-from verso_app.server.retrieve.term_mapping.models import QueryTermMapping
-from verso_app.server.retrieve.term_mapping.service import _UNSET, QueryTermMappingService
+from verso_app.server.term_mapping.models import QueryTermMapping
+from verso_app.server.term_mapping.service import _UNSET, QueryTermMappingService
 from verso_app.web.middleware.auth import get_current_user, get_term_mapping_service
 from verso_common.models import QueryTermMappingView
 from verso_common.result import ListResponse

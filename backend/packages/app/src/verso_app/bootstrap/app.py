@@ -41,7 +41,7 @@ async def lifespan(_app: FastAPI):
         from verso_app.server.reputation import (
             models as reputation_models,  # noqa: F401
         )
-        from verso_app.server.retrieve.term_mapping import (
+        from verso_app.server.term_mapping import (
             models as term_mapping_models,  # noqa: F401
         )
         from verso_framework.mq import models as mq_models  # noqa: F401
