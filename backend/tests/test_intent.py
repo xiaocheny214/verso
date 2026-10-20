@@ -14,6 +14,7 @@
 from collections.abc import Iterator
 
 import pytest
+from fakes import FakeRedis
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -22,10 +23,14 @@ from sqlalchemy.pool import StaticPool
 from verso_app.bootstrap.app import create_app
 from verso_app.server.auth.models import User
 from verso_app.server.intent.models import IntentNode
-from verso_app.server.intent.service import IntentService
+from verso_app.server.intent.service import (
+    CACHE_KEY_PREFIX,
+    EMPTY_CACHE_SENTINEL,
+    IntentService,
+)
 from verso_app.server.knowledge.models import KnowledgeBase
 from verso_app.server.knowledge.service import KnowledgeService
-from verso_app.web.middleware.auth import get_current_user, get_session
+from verso_app.web.middleware.auth import get_current_user, get_intent_service, get_session
 from verso_common.enums import BizCode, IntentKind, IntentLayer, UserStatus
 from verso_common.exceptions import BizException
 from verso_framework.db.base import Base
@@ -248,6 +253,7 @@ def test_intent_trees_route_and_server_built_forest(db: Session) -> None:
     app = create_app()
     app.dependency_overrides[get_session] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: owner
+    app.dependency_overrides[get_intent_service] = lambda: IntentService()
     client = TestClient(app)
 
     # 创建根节点 1 (sort=20)
@@ -340,6 +346,7 @@ def test_intent_routes_cross_user_isolation(db: Session) -> None:
     # owner 创建节点
     app.dependency_overrides[get_session] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: owner
+    app.dependency_overrides[get_intent_service] = lambda: IntentService()
     client = TestClient(app)
     created = client.post(
         "/me/intent-nodes",
@@ -360,3 +367,79 @@ def test_intent_routes_cross_user_isolation(db: Session) -> None:
     assert res_del.json()["code"] == BizCode.NOT_FOUND
 
     app.dependency_overrides.clear()
+
+
+def test_intent_tree_cache_isolates_tenants_and_invalidates(db: Session) -> None:
+    owner = _user(db, "owner")
+    other = _user(db, "other")
+    empty = _user(db, "empty")
+    redis = FakeRedis()
+    service = IntentService(redis=redis)
+
+    oa = service.create(db, user_id=owner.id, identifier="oa", name="OA系统", sort=2)
+    service.create(
+        db,
+        user_id=owner.id,
+        identifier="oa_intro",
+        name="系统介绍",
+        parent_id=oa.id,
+        sort=0,
+        description="OA 介绍",
+        examples="介绍 OA",
+    )
+    service.create(db, user_id=owner.id, identifier="insurance", name="保险系统", sort=1)
+    service.create(db, user_id=other.id, identifier="secret", name="私有树")
+
+    owner_key = f"{CACHE_KEY_PREFIX}{owner.id}"
+    other_key = f"{CACHE_KEY_PREFIX}{other.id}"
+    empty_key = f"{CACHE_KEY_PREFIX}{empty.id}"
+
+    assert service.load_nodes(db, user_id=empty.id) == []
+    assert EMPTY_CACHE_SENTINEL in redis.values[empty_key]
+
+    owner_nodes = service.load_nodes(db, user_id=owner.id)
+    other_nodes = service.load_nodes(db, user_id=other.id)
+    assert [node.identifier for node in owner_nodes] == ["oa_intro", "insurance", "oa"]
+    intro = owner_nodes[0]
+    assert intro.parent_id == oa.id
+    assert intro.description == "OA 介绍"
+    assert intro.examples == "介绍 OA"
+    assert [node.identifier for node in other_nodes] == ["secret"]
+    assert "secret" not in redis.values[owner_key]
+    assert "oa_intro" not in redis.values[other_key]
+
+    cached_again = service.load_nodes(db, user_id=owner.id)
+    assert [node.identifier for node in cached_again] == ["oa_intro", "insurance", "oa"]
+    assert cached_again[0].parent_id == oa.id
+
+    service.update(db, user_id=owner.id, node_id=oa.id, name="办公系统")
+    assert owner_key not in redis.values
+    assert other_key in redis.values
+
+    reloaded = service.load_nodes(db, user_id=owner.id)
+    assert next(node.name for node in reloaded if node.identifier == "oa") == "办公系统"
+    assert owner_key in redis.values
+
+    service.delete(db, user_id=owner.id, node_id=intro.id)
+    assert owner_key not in redis.values
+
+
+def test_intent_tree_cache_falls_back_when_redis_is_unusable(db: Session) -> None:
+    owner = _user(db, "owner")
+    service = IntentService(redis=_BrokenRedis())
+    service.create(db, user_id=owner.id, identifier="oa", name="OA系统")
+
+    nodes = service.load_nodes(db, user_id=owner.id)
+
+    assert [node.identifier for node in nodes] == ["oa"]
+
+
+class _BrokenRedis(FakeRedis):
+    def get(self, name: str) -> str | None:
+        raise RuntimeError("redis down")
+
+    def set(self, name: str, value: str, ex: int | None = None, nx: bool = False) -> bool | None:
+        raise RuntimeError("redis down")
+
+    def delete(self, *names: str) -> None:
+        raise RuntimeError("redis down")
