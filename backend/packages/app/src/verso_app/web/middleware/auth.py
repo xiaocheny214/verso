@@ -13,6 +13,7 @@ from verso_app.server.auth.service import AuthService
 from verso_app.server.auth.session_store import SessionStore
 from verso_app.server.collect.service import CollectService
 from verso_app.server.exchange.service import ExchangeService
+from verso_app.server.intent.service import IntentService
 from verso_app.server.match.compatibility import build_pair_compatibility_evaluator
 from verso_app.server.match.service import MatchService
 from verso_app.server.portrait.extractor import build_evidence_classifier
@@ -89,6 +90,13 @@ def get_quality_service(session: SessionDep) -> QualityService:
         reputation=ReputationService(settings=settings),
         judge=build_judge(settings),
     )
+
+
+def get_intent_service() -> IntentService:
+    redis_client = None
+    with contextlib.suppress(Exception):
+        redis_client = get_redis()
+    return IntentService(redis=redis_client)
 
 
 def get_term_mapping_service(session: SessionDep) -> QueryTermMappingService:

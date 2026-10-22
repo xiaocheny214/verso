@@ -10,6 +10,7 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from verso_common.constants import (
+    INTENT_CLASSIFIER_PROMPT_PATH,
     QUERY_REWRITE_AND_SPLIT_PROMPT_PATH,
     REPUTATION_GOOD_DELTA,
     REPUTATION_INITIAL_SCORE,
@@ -46,6 +47,8 @@ class AppSettings(BaseSettings):
     query_rewrite_enabled: bool = True
     # 查询改写系统提示词路径。默认指向 llm_pipeline 包内的模板。
     query_rewrite_prompt_path: str = QUERY_REWRITE_AND_SPLIT_PROMPT_PATH
+    # 意图分类系统提示词路径。默认指向 llm_pipeline 包内的模板。
+    intent_classifier_prompt_path: str = INTENT_CLASSIFIER_PROMPT_PATH
     # 全站向量维度；None = 用模型默认输出维。process / retrieve / Milvus 必须同一值。
     llm_embedding_dimensions: int | None = None
     match_retrieval_top_k: int = RETRIEVAL_TOP_K

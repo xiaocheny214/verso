@@ -1,12 +1,16 @@
 """用户意图节点 CRUD 与树结构校验。
 
 节点存储为扁平父子关系，写入一次一个节点，读取可输出已装配好的森林结构。
+一个用户可以有多棵根树。Redis 按用户缓存整片森林，键里带 user_id，租户之间不共用。
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import re
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,12 +20,34 @@ from verso_app.server.knowledge.models import KnowledgeBase
 from verso_common.enums import BizCode, IntentKind, IntentLayer
 from verso_common.exceptions import BizException
 
+if TYPE_CHECKING:
+    from redis import Redis
+
+logger = logging.getLogger("verso.intent")
+
+CACHE_KEY_PREFIX = "verso:intent_trees:"
+CACHE_TTL_SECONDS = 3600
+EMPTY_CACHE_SENTINEL = "__empty__"
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 _UNSET = object()
 
 
 class IntentService:
     """当前用户拥有的意图节点服务。"""
+
+    def __init__(self, redis: Redis | None = None) -> None:
+        self._redis = redis
+
+    def _cache_key(self, user_id: uuid.UUID) -> str:
+        return f"{CACHE_KEY_PREFIX}{user_id}"
+
+    def _invalidate_cache(self, user_id: uuid.UUID) -> None:
+        if self._redis is None:
+            return
+        try:
+            self._redis.delete(self._cache_key(user_id))
+        except Exception as exc:
+            logger.warning("删除 Redis 意图树缓存失败 user_id=%s: %s", user_id, exc)
 
     def _validate_identifier(self, identifier: str) -> str:
         clean = identifier.strip()
@@ -165,6 +191,7 @@ class IntentService:
         )
         db.add(row)
         db.flush()
+        self._invalidate_cache(user_id)
         return row
 
     def get(self, db: Session, *, user_id: uuid.UUID, node_id: uuid.UUID) -> IntentNode:
@@ -251,6 +278,7 @@ class IntentService:
             row.enabled = enabled
 
         db.flush()
+        self._invalidate_cache(user_id)
         return row
 
     def delete(self, db: Session, *, user_id: uuid.UUID, node_id: uuid.UUID) -> None:
@@ -267,9 +295,10 @@ class IntentService:
             raise BizException("该意图节点仍有子节点，无法删除", code=BizCode.CONFLICT)
         db.delete(row)
         db.flush()
+        self._invalidate_cache(user_id)
 
     def list_nodes(self, db: Session, *, user_id: uuid.UUID) -> list[IntentNode]:
-        """按 sort 升序、id 升序返回该用户所有意图节点。"""
+        """按 sort 升序、id 升序返回该用户所有意图节点。直接读库，不走缓存。"""
         return list(
             db.scalars(
                 select(IntentNode)
@@ -277,3 +306,108 @@ class IntentService:
                 .order_by(IntentNode.sort.asc(), IntentNode.id.asc())
             ).all()
         )
+
+    def load_nodes(self, db: Session, *, user_id: uuid.UUID) -> list[IntentNode]:
+        """读取该用户的整片意图森林，供检索等调用方传给意图分类。
+
+        一个用户可以有多棵根树，它们放在同一条缓存里。键包含 user_id，
+        不会读到其他租户的节点。未命中时回源数据库；没有节点时写入空标记。
+        """
+        cached = self._read_cache(user_id)
+        if cached is not None:
+            return cached
+        nodes = self.list_nodes(db, user_id=user_id)
+        self._write_cache(user_id, nodes)
+        return nodes
+
+    def _read_cache(self, user_id: uuid.UUID) -> list[IntentNode] | None:
+        if self._redis is None:
+            return None
+        try:
+            cached = self._redis.get(self._cache_key(user_id))
+            if cached is None:
+                return None
+            data = json.loads(cached)
+        except Exception as exc:
+            logger.warning("读取 Redis 意图树缓存失败 user_id=%s: %s", user_id, exc)
+            return None
+        if isinstance(data, dict) and data.get(EMPTY_CACHE_SENTINEL):
+            return []
+        nodes = _nodes_from_cache(data)
+        if nodes is None:
+            logger.warning("Redis 意图树缓存格式无效 user_id=%s", user_id)
+            return None
+        return nodes
+
+    def _write_cache(self, user_id: uuid.UUID, nodes: list[IntentNode]) -> None:
+        if self._redis is None:
+            return
+        try:
+            if not nodes:
+                payload = json.dumps({EMPTY_CACHE_SENTINEL: True})
+            else:
+                payload = json.dumps([_dump_node(node) for node in nodes])
+            self._redis.set(self._cache_key(user_id), payload, ex=CACHE_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("写入 Redis 意图树缓存失败 user_id=%s: %s", user_id, exc)
+
+
+def _dump_node(node: IntentNode) -> dict[str, object]:
+    return {
+        "id": str(node.id),
+        "user_id": str(node.user_id),
+        "parent_id": None if node.parent_id is None else str(node.parent_id),
+        "identifier": node.identifier,
+        "name": node.name,
+        "layer": node.layer,
+        "kind": node.kind,
+        "knowledge_base_id": None
+        if node.knowledge_base_id is None
+        else str(node.knowledge_base_id),
+        "description": node.description,
+        "examples": node.examples,
+        "prompt_template": node.prompt_template,
+        "topic_k": node.topic_k,
+        "sort": node.sort,
+        "enabled": node.enabled,
+    }
+
+
+def _nodes_from_cache(data: object) -> list[IntentNode] | None:
+    if not isinstance(data, list):
+        return None
+    nodes: list[IntentNode] = []
+    for item in data:
+        node = _node_from_cache(item)
+        if node is None:
+            return None
+        nodes.append(node)
+    return nodes
+
+
+def _node_from_cache(item: object) -> IntentNode | None:
+    if not isinstance(item, dict):
+        return None
+    try:
+        parent_id = item.get("parent_id")
+        knowledge_base_id = item.get("knowledge_base_id")
+        return IntentNode(
+            id=uuid.UUID(str(item["id"])),
+            user_id=uuid.UUID(str(item["user_id"])),
+            parent_id=uuid.UUID(str(parent_id)) if parent_id else None,
+            identifier=str(item["identifier"]),
+            name=str(item["name"]),
+            layer=str(item["layer"]),
+            kind=str(item["kind"]),
+            knowledge_base_id=uuid.UUID(str(knowledge_base_id)) if knowledge_base_id else None,
+            description=str(item.get("description") or ""),
+            examples=str(item.get("examples") or ""),
+            prompt_template=item.get("prompt_template")
+            if isinstance(item.get("prompt_template"), str)
+            else None,
+            topic_k=item.get("topic_k") if isinstance(item.get("topic_k"), int) else None,
+            sort=int(item.get("sort") or 0),
+            enabled=bool(item.get("enabled", True)),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None

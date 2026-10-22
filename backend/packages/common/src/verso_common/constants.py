@@ -23,6 +23,8 @@ RETRIEVAL_MIN_SCORE = 0.2
 # 相对 llm_pipeline 包目录。查询改写只加载这一份系统提示词。
 QUERY_REWRITE_AND_SPLIT_PROMPT_PATH = "templates/query_rewrite.jinja2"
 QUERY_REWRITE_ASSISTANT_HISTORY_LIMIT = 2
+# 相对 llm_pipeline 包目录。意图分类把叶子节点填进 {intent_list}。
+INTENT_CLASSIFIER_PROMPT_PATH = "templates/intent_classifier.jinja2"
 MAX_EVIDENCE_EXCERPT = 400
 
 QUALITY_SCORE_MIN = 0

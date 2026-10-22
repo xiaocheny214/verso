@@ -11,13 +11,13 @@ from pydantic import BaseModel, Field
 from verso_app.server.auth.models import User
 from verso_app.server.intent.models import IntentNode
 from verso_app.server.intent.service import _UNSET, IntentService
-from verso_app.web.middleware.auth import SessionDep, get_current_user
+from verso_app.web.middleware.auth import SessionDep, get_current_user, get_intent_service
 from verso_common.models import IntentForestView, IntentNodeView, IntentTreeView
 from verso_common.result import Response as ApiResponse
 
 router = APIRouter(tags=["intent"])
 
-IntentDep = Annotated[IntentService, Depends(IntentService)]
+IntentDep = Annotated[IntentService, Depends(get_intent_service)]
 UserDep = Annotated[User, Depends(get_current_user)]
 
 
